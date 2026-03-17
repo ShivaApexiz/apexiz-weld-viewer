@@ -728,11 +728,57 @@ const STATE = {
 
 // Persistent key-value store backed by window.storage (artifact storage)
 // For a real deployment, replace these with fetch() calls to your backend API
+
+const BIN_ID = "69b921a5aa77b81da9f0d1b6";
+const API_KEY = "$2a$10$mZbpKZPpwf6Lcnnnsmyq3Oam73GdNlIe/YcC.lj0Swy9MQ03R6dRC";
+
+  
+let CACHE = null;
+
 const DB = {
-  async get(key){ try{ const r=await window.storage.get(key,true); return r?JSON.parse(r.value):null; }catch(e){return null;} },
-  async set(key,val){ try{ await window.storage.set(key,JSON.stringify(val),true); }catch(e){} },
-  async del(key){ try{ await window.storage.delete(key,true); }catch(e){} },
-  async list(prefix){ try{ const r=await window.storage.list(prefix,true); return r?r.keys:[]; }catch(e){return[];} },
+
+  async getAll() {
+    if (CACHE) return CACHE;
+
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      headers: { "X-Master-Key": API_KEY }
+    });
+
+    const data = await res.json();
+    CACHE = data.record || {};
+    return CACHE;
+  },
+
+  async saveAll(data) {
+    CACHE = data;
+
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": API_KEY
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  async get(key) {
+    const db = await this.getAll();
+    return db[key] || null;
+  },
+
+  async set(key, value) {
+    const db = await this.getAll();
+    db[key] = value;
+    await this.saveAll(db);
+  },
+
+  async delete(key) {
+    const db = await this.getAll();
+    delete db[key];
+    await this.saveAll(db);
+  }
+
 };
 
 /* ══════════════════════════════════════════════
