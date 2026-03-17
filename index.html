@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Apexiz Weld Viewer</title>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -899,8 +899,8 @@ function loadPartDropdown(){
   const dd=document.getElementById('partDropdown');
   dd.innerHTML='';
   const parts=detectParts(S.csvFiles);
-  (parts.length>0?parts:[...S.csvFiles.values()].filter(v=>v.name.toLowerCase()!=='part_data.csv').map(v=>v.name.replace(/\.csv$/i,''))]
-    .forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;dd.appendChild(o);});
+  const list=parts.length>0?parts:[...S.csvFiles.values()].filter(v=>v.name.toLowerCase()!=='part_data.csv').map(v=>v.name.replace(/\.csv$/i,''));
+  list.forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;dd.appendChild(o);});
   dd.addEventListener('change',loadWeldData);
 }
 
