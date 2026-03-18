@@ -616,18 +616,26 @@ async function processNewFolder(files){
     const ext=file.name.split('.').pop().toLowerCase();
     if(ext==='csv'){
       promises.push(new Promise(res=>{
-        const r=new FileReader(); r.onload=ev=>{newFiles.csv.set(file.name.toLowerCase(),{name:file.name,text:ev.target.result,path:rel});res();};
+        const r=new FileReader();
+        r.onload=ev=>{
+          newFiles.csv.set(file.name.toLowerCase(),{name:file.name,text:ev.target.result,path:rel});
+          res();
+        };
         r.readAsText(file);
       }));
     } else if(['png','jpg','jpeg'].includes(ext)){
+      // Store file reference AND dataUrl for preview
       promises.push(new Promise(res=>{
-        const r=new FileReader(); r.onload=ev=>{
-          const k=file.name.toLowerCase(); const kn=k.replace(/\.[^.]+$/,'');
-          const pn=rel.toLowerCase().replace(/\.[^.]+$/,'');
-          const entry={name:file.name,dataUrl:ev.target.result,path:rel,blob:null,file};
-          newFiles.images.set(k,entry); newFiles.images.set(kn,entry); newFiles.images.set(pn,entry);
+        const r=new FileReader();
+        r.onload=ev=>{
+          const k=file.name.toLowerCase();
+          const kn=k.replace(/\.[^.]+$/,'');
+          const entry={name:file.name,dataUrl:ev.target.result,path:rel,file:file};
+          newFiles.images.set(k,entry);
+          newFiles.images.set(kn,entry);
           res();
-        }; r.readAsDataURL(file);
+        };
+        r.readAsDataURL(file);
       }));
     }
   });
@@ -655,31 +663,38 @@ async function createProject(){
 
   const projId=proj.id;
   const bucket='projects';
-  const basePath=projId;
 
-  // 2. Upload CSV files
+  // 2. Upload CSV files — stored flat: projId/csv/filename.csv
   const csvEntries=[...newFiles.csv.values()];
   for(let i=0;i<csvEntries.length;i++){
     const v=csvEntries[i];
-    loading(true,`Uploading CSV ${i+1}/${csvEntries.length}…`);
+    loading(true,`Uploading CSV ${i+1}/${csvEntries.length}: ${v.name}`);
     const blob=new Blob([v.text],{type:'text/csv'});
-    await sb.storage.from(bucket).upload(`${basePath}/csv/${v.name}`,blob,{upsert:true});
+    const {error:ce}=await sb.storage.from(bucket).upload(`${projId}/csv/${v.name}`,blob,{upsert:true});
+    if(ce) console.warn('CSV upload error:',v.name,ce.message);
   }
 
-  // 3. Upload images (unique by path)
-  const uniqueImages=[...new Map([...newFiles.images.entries()].filter(([k,v])=>k===v.name.toLowerCase().replace(/\.[^.]+$/,'')).map(([k,v])=>[v.path,v])).values()];
+  // 3. Upload images — stored flat: projId/images/filename.ext
+  // Deduplicate by original file path
+  const seenPaths=new Set();
+  const uniqueImages=[];
+  for(const [k,v] of newFiles.images){
+    if(v.file && !seenPaths.has(v.path)){
+      seenPaths.add(v.path);
+      uniqueImages.push(v);
+    }
+  }
   for(let i=0;i<uniqueImages.length;i++){
     const v=uniqueImages[i];
-    loading(true,`Uploading image ${i+1}/${uniqueImages.length}…`);
-    const resp=await fetch(v.dataUrl);
-    const imgBlob=await resp.blob();
-    const storagePath=`${basePath}/images/${v.path.replace(/^[^/]+\//,'')}`;
-    await sb.storage.from(bucket).upload(storagePath,imgBlob,{upsert:true,contentType:imgBlob.type});
+    loading(true,`Uploading image ${i+1}/${uniqueImages.length}: ${v.name}`);
+    // Upload using original File object directly — most reliable
+    const {error:ie}=await sb.storage.from(bucket).upload(`${projId}/images/${v.name}`,v.file,{upsert:true,contentType:v.file.type||'image/png'});
+    if(ie) console.warn('Image upload error:',v.name,ie.message);
   }
 
   loading(false);
   btn.disabled=false; btn.innerText='Create & Upload Project →';
-  alert(`Project "${name}" created with ${parts.length} part(s) and ${uniqueImages.length} image(s) uploaded!`);
+  alert(`Project "${name}" created!\n${csvEntries.length} CSV files · ${uniqueImages.length} images uploaded.`);
   showPanel('projects');
 }
 
@@ -796,16 +811,37 @@ async function openViewer(projId){
   const {data:proj}=await sb.from('projects').select('*').eq('id',projId).single();
   if(!proj){loading(false);alert('Project not found.');return;}
 
-  // List all CSV files
-  const {data:csvList=[]}=await sb.storage.from('projects').list(`${projId}/csv`);
+  // List and download all CSV files
+  loading(true,'Loading CSV data…');
+  const {data:csvList,error:csvErr}=await sb.storage.from('projects').list(`${projId}/csv`,{limit:500});
+  console.log('CSV list:',csvList,csvErr);
   for(const f of csvList||[]){
-    const {data}=await sb.storage.from('projects').download(`${projId}/csv/${f.name}`);
-    if(data){ const text=await data.text(); S.csvFiles.set(f.name.toLowerCase(),{name:f.name,text}); }
+    if(!f.name.toLowerCase().endsWith('.csv')) continue;
+    const {data:blob,error:dlErr}=await sb.storage.from('projects').download(`${projId}/csv/${f.name}`);
+    if(dlErr){console.warn('CSV download error:',f.name,dlErr.message);continue;}
+    const text=await blob.text();
+    S.csvFiles.set(f.name.toLowerCase(),{name:f.name,text});
+    console.log('Loaded CSV:',f.name,'rows:',(text.split('\n').length-1));
   }
 
-  // List all images (recursive via path)
-  const {data:imgList=[]}=await sb.storage.from('projects').list(`${projId}/images`,{limit:1000});
-  await loadImagesRecursive(`${projId}/images`,imgList||[]);
+  // List all images and get public URLs — flat structure: projId/images/filename
+  loading(true,'Loading images…');
+  const {data:imgList,error:imgErr}=await sb.storage.from('projects').list(`${projId}/images`,{limit:1000});
+  console.log('Image list:',imgList,imgErr);
+  for(const f of imgList||[]){
+    if(!f.name) continue;
+    const ext=f.name.split('.').pop().toLowerCase();
+    if(!['png','jpg','jpeg'].includes(ext)) continue;
+    const {data:urlData}=sb.storage.from('projects').getPublicUrl(`${projId}/images/${f.name}`);
+    const publicUrl=urlData?.publicUrl;
+    if(!publicUrl) continue;
+    const k=f.name.toLowerCase();
+    const kn=k.replace(/\.[^.]+$/,'');
+    const entry={name:f.name,dataUrl:publicUrl,path:`${projId}/images/${f.name}`};
+    S.imageFiles.set(k,entry);
+    S.imageFiles.set(kn,entry);
+    console.log('Loaded image:',f.name,'->',publicUrl);
+  }
 
   document.getElementById('viewerTitle').innerText=proj.name;
   document.getElementById('viewerAvatar').innerText=S.profile.name[0].toUpperCase();
@@ -906,16 +942,20 @@ function loadPartDropdown(){
 
 function loadWeldData(){
   const part=document.getElementById('partDropdown').value;
+  console.log('loadWeldData part:',part,'csvFiles:',[...S.csvFiles.keys()],'imageFiles:',[...S.imageFiles.keys()].slice(0,10));
   ['weldNumber','jobName','positionerAngle','robotName'].forEach(id=>document.getElementById(id).innerText='—');
   const imgEl=document.getElementById('mainImage');
   imgEl.style.backgroundImage='none'; imgEl.innerText='[ Select a weld to view image ]';
   setActiveCell(null);
   const t1=getCSV(`${part}_Robot1.csv`)||getCSV(`${part}_robot1.csv`);
   const t2=getCSV(`${part}_Robot2.csv`)||getCSV(`${part}_robot2.csv`);
+  console.log('CSV t1:',t1?'found ('+t1.split('\n').length+' rows)':'NOT FOUND');
+  console.log('CSV t2:',t2?'found ('+t2.split('\n').length+' rows)':'NOT FOUND');
   S.welds1=t1?parseCSV(t1):[]; S.welds2=t2?parseCSV(t2):[];
   buildGrid(S.welds1,S.welds2,t1,t2);
   const ov=document.getElementById('overviewImage');
   const ovUrl=findImg(part);
+  console.log('Overview image for',part,':',ovUrl?'found':'NOT FOUND');
   if(ovUrl){ov.style.backgroundImage=`url("${ovUrl}")`;ov.innerText='';}
   else{ov.style.backgroundImage='none';ov.innerText='[ Part Image ]';}
 }
