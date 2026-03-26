@@ -32,6 +32,7 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
 .user-name{font-size:12px;font-weight:600;color:var(--g4);}
 .role-badge{padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
 .role-badge.admin{background:var(--black);color:var(--white);}
+.role-badge.company_admin{background:#1A73E8;color:var(--white);}
 .role-badge.engineer{background:var(--orange);color:var(--white);}
 .role-badge.customer{background:var(--g2);color:var(--g4);}
 
@@ -101,6 +102,7 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
 .tbl-badge.approved{background:#D4EDDA;color:var(--green);}
 .tbl-badge.revoked{background:#F8D7DA;color:var(--red);}
 .tbl-badge.admin{background:var(--black);color:var(--white);}
+.tbl-badge.company_admin{background:#1A73E8;color:var(--white);}
 .tbl-badge.engineer{background:var(--orange);color:var(--white);}
 .tbl-badge.customer{background:var(--g2);color:var(--g4);}
 .tbl-btn{padding:4px 11px;border-radius:20px;font-size:10px;font-weight:700;border:none;cursor:pointer;transition:all 0.12s;font-family:'Barlow',sans-serif;margin:0 2px;}
@@ -289,10 +291,17 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
       <button class="sidebar-btn active" onclick="showPanel('overview')" id="nav-overview"><span>📊</span> Overview</button>
       <button class="sidebar-btn" onclick="showPanel('projects')" id="nav-projects"><span>📁</span> My Projects</button>
       <button class="sidebar-btn" onclick="showPanel('create')" id="nav-create"><span>➕</span> New Project</button>
+      <div id="cadminNav" style="display:none">
+        <div class="sidebar-section">Company Admin</div>
+        <button class="sidebar-btn" onclick="showPanel('myengineers')" id="nav-myengineers"><span>🧑‍🔧</span> My Engineers</button>
+        <button class="sidebar-btn" onclick="showPanel('addEngineer')" id="nav-addEngineer"><span>➕</span> Add Engineer</button>
+        <button class="sidebar-btn" onclick="showPanel('companyprojects')" id="nav-companyprojects"><span>🗂️</span> Company Projects</button>
+      </div>
       <div id="adminNav" style="display:none">
         <div class="sidebar-section">Admin</div>
         <button class="sidebar-btn" onclick="showPanel('users')" id="nav-users"><span>👥</span> All Users</button>
         <button class="sidebar-btn" onclick="showPanel('allprojects')" id="nav-allprojects"><span>🗂️</span> All Projects</button>
+        <button class="sidebar-btn" onclick="showPanel('companies')" id="nav-companies"><span>🏢</span> Companies</button>
       </div>
       <div class="sidebar-divider"></div>
       <button class="logout-btn" onclick="doLogout()">↩ Sign Out</button>
@@ -475,14 +484,19 @@ async function afterAuth(authUser){
 }
 
 function routeUser(profile){
-  if(profile.role==='admin'||profile.role==='engineer'){
+  if(profile.role==='admin'||profile.role==='engineer'||profile.role==='company_admin'){
     document.getElementById('dashAvatar').innerText=profile.name[0].toUpperCase();
     document.getElementById('dashUserName').innerText=profile.name;
     const b=document.getElementById('dashRoleBadge');
-    b.innerText=profile.role.charAt(0).toUpperCase()+profile.role.slice(1);
+    const roleLabel=profile.role==='company_admin'?'Company Admin':profile.role.charAt(0).toUpperCase()+profile.role.slice(1);
+    b.innerText=roleLabel;
     b.className='role-badge '+profile.role;
     document.getElementById('adminNav').style.display=profile.role==='admin'?'block':'none';
-    document.getElementById('nav-create').style.display=profile.role==='admin'?'none':'flex';
+    document.getElementById('cadminNav').style.display=profile.role==='company_admin'?'block':'none';
+    // Engineers can create projects; company_admin and admin cannot from nav
+    document.getElementById('nav-create').style.display=profile.role==='engineer'?'flex':'none';
+    // company_admin sees My Projects to view their company's projects
+    document.getElementById('nav-projects').style.display=(profile.role==='engineer'||profile.role==='company_admin')?'flex':'none';
     showPage('dashPage');
     showPanel('overview');
   } else {
@@ -512,30 +526,43 @@ async function showPanel(panel){
   setNav(panel);
   const main=document.getElementById('dashMain');
   main.innerHTML='<div class="empty-state"><span class="empty-state-icon">⏳</span></div>';
-  if(panel==='overview')    await renderOverview(main);
-  else if(panel==='projects')    await renderMyProjects(main);
-  else if(panel==='create')      renderCreateProject(main);
-  else if(panel==='users')       await renderUsers(main);
-  else if(panel==='allprojects') await renderAllProjects(main);
+  if(panel==='overview')          await renderOverview(main);
+  else if(panel==='projects')     await renderMyProjects(main);
+  else if(panel==='create')       renderCreateProject(main);
+  else if(panel==='users')        await renderUsers(main);
+  else if(panel==='allprojects')  await renderAllProjects(main);
+  else if(panel==='companies')    await renderCompanies(main);
+  else if(panel==='myengineers')  await renderMyEngineers(main);
+  else if(panel==='addEngineer')  renderAddEngineer(main);
+  else if(panel==='companyprojects') await renderCompanyProjects(main);
 }
 
 async function renderOverview(el){
   const uid=S.profile.id; const role=S.profile.role;
   let q=sb.from('projects').select('id,name,created_at,parts,access_requests(id,status)');
-  if(role!=='admin') q=q.eq('owner_id',uid);
+  if(role==='engineer') q=q.eq('owner_id',uid);
+  else if(role==='company_admin'){
+    // get all engineers under this company admin
+    const {data:myEngs=[]}=await sb.from('profiles').select('id').eq('company_admin_id',uid);
+    const engIds=myEngs.map(e=>e.id);
+    engIds.push(uid);
+    q=q.in('owner_id',engIds);
+  }
   const {data:projects=[]}=await q;
   const total=projects.length;
   const approved=projects.reduce((a,p)=>a+(p.access_requests||[]).filter(r=>r.status==='approved').length,0);
   const pending=projects.reduce((a,p)=>a+(p.access_requests||[]).filter(r=>r.status==='pending').length,0);
-  let usersCount='';
-  if(role==='admin'){const {count}=await sb.from('profiles').select('*',{count:'exact',head:true}); usersCount=`<div class="stat-card"><div class="stat-num">${count||0}</div><div class="stat-label">Total Users</div></div>`;}
+  let extraStat='';
+  if(role==='admin'){const {count}=await sb.from('profiles').select('*',{count:'exact',head:true}); extraStat=`<div class="stat-card"><div class="stat-num">${count||0}</div><div class="stat-label">Total Users</div></div>`;}
+  if(role==='company_admin'){const {count}=await sb.from('profiles').select('*',{count:'exact',head:true}).eq('company_admin_id',uid); extraStat=`<div class="stat-card"><div class="stat-num">${count||0}</div><div class="stat-label">My Engineers</div></div>`;}
+  const projLabel=role==='admin'?'Total':role==='company_admin'?'Company':'My';
   el.innerHTML=`
     <div class="panel-title">Overview</div>
     <div class="stat-row">
-      <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">${role==='admin'?'Total':'My'} Projects</div></div>
+      <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">${projLabel} Projects</div></div>
       <div class="stat-card"><div class="stat-num">${approved}</div><div class="stat-label">Active Customers</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">Pending Requests</div></div>
-      ${usersCount}
+      ${extraStat}
     </div>
     ${pending>0?`<div class="info-msg">⚠️ You have <strong>${pending}</strong> pending access request(s).</div>`:''}
     <div class="panel-title">Recent Projects</div>
@@ -547,11 +574,16 @@ async function renderOverview(el){
 async function renderMyProjects(el){
   const uid=S.profile.id; const role=S.profile.role;
   let q=sb.from('projects').select('id,name,created_at,parts,access_requests(id,status)').order('created_at',{ascending:false});
-  if(role!=='admin') q=q.eq('owner_id',uid);
+  if(role==='engineer') q=q.eq('owner_id',uid);
+  else if(role==='company_admin'){
+    const {data:myEngs=[]}=await sb.from('profiles').select('id').eq('company_admin_id',uid);
+    const engIds=myEngs.map(e=>e.id); engIds.push(uid);
+    q=q.in('owner_id',engIds);
+  }
   const {data:projects=[]}=await q;
   el.innerHTML=`
-    <div class="flex-row"><div class="panel-title">My Projects</div>
-    ${role!=='admin'?`<button class="action-btn" onclick="showPanel('create')" style="margin-left:auto">+ New Project</button>`:''}</div>
+    <div class="flex-row"><div class="panel-title">${role==='company_admin'?'Company Projects':'My Projects'}</div>
+    ${role==='engineer'?`<button class="action-btn" onclick="showPanel('create')" style="margin-left:auto">+ New Project</button>`:''}</div>
     ${projects.length===0?'<div class="empty-state"><span class="empty-state-icon">📁</span><div class="empty-state-text">No projects yet.</div></div>':`
     <table class="data-table"><thead><tr><th>Project</th><th>Parts</th><th>Customers</th><th>Pending</th><th>Actions</th></tr></thead>
     <tbody>${projects.map(p=>projRow(p)).join('')}</tbody></table>`}`;
@@ -576,11 +608,12 @@ function projRow(p){
 async function renderUsers(el){
   const {data:users=[]}=await sb.from('profiles').select('*').order('created_at');
   el.innerHTML=`<div class="panel-title">All Users</div>
-    <table class="data-table"><thead><tr><th>Name</th><th>Email (Auth)</th><th>Role</th><th>Actions</th></tr></thead>
+    <table class="data-table"><thead><tr><th>Name</th><th>Email (Auth)</th><th>Role</th><th>Company Admin</th><th>Actions</th></tr></thead>
     <tbody>${users.map(u=>`<tr>
       <td><strong>${u.name}</strong></td>
       <td>${u.id}</td>
-      <td><span class="tbl-badge ${u.role}">${u.role}</span></td>
+      <td><span class="tbl-badge ${u.role}">${u.role==='company_admin'?'Company Admin':u.role}</span></td>
+      <td>${u.company_admin_id?`<span class="tbl-badge company_admin">Assigned</span>`:'—'}</td>
       <td>${u.role!=='admin'?`<button class="tbl-btn delete" onclick="deleteUser('${u.id}')">Remove</button>`:'—'}</td>
     </tr>`).join('')}</tbody></table>`;
 }
@@ -598,6 +631,217 @@ async function renderAllProjects(el){
         <button class="tbl-btn manage" onclick="showAccess('${p.id}','${p.name}')">Access</button>
         <button class="tbl-btn delete" onclick="deleteProject('${p.id}')">Delete</button>
       </td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ── Companies panel (admin: manage company admins) ── */
+async function renderCompanies(el){
+  const {data:cadmins=[]}=await sb.from('profiles').select('*').eq('role','company_admin').order('created_at');
+  const {data:allUsers=[]}=await sb.from('profiles').select('id,name,role,company_admin_id').neq('role','admin').neq('role','company_admin').neq('role','customer');
+  el.innerHTML=`
+    <div class="flex-row">
+      <div class="panel-title">Company Admins</div>
+      <button class="action-btn" onclick="showAddCompanyAdmin()" style="margin-left:auto">+ Add Company Admin</button>
+    </div>
+    ${cadmins.length===0?'<div class="empty-state"><span class="empty-state-icon">🏢</span><div class="empty-state-text">No company admins yet.</div></div>':`
+    <table class="data-table"><thead><tr><th>Name</th><th>ID</th><th>Engineers</th><th>Actions</th></tr></thead>
+    <tbody>${cadmins.map(ca=>{
+      const engCount=allUsers.filter(u=>u.company_admin_id===ca.id).length;
+      return `<tr>
+        <td><strong>${ca.name}</strong></td>
+        <td style="font-size:10px;color:var(--g3)">${ca.id.substring(0,16)}…</td>
+        <td><span class="tbl-badge approved">${engCount}</span></td>
+        <td>
+          <button class="tbl-btn manage" onclick="showAssignEngineers('${ca.id}','${ca.name}')">Assign Engineers</button>
+          <button class="tbl-btn delete" onclick="deleteUser('${ca.id}')">Remove</button>
+        </td></tr>`;}).join('')}</tbody></table>`}
+    <div id="addCAdminForm" style="display:none" class="create-form" style="margin-top:14px"></div>
+    <div id="assignEngForm" style="display:none" class="create-form" style="margin-top:14px"></div>`;
+}
+
+function showAddCompanyAdmin(){
+  const f=document.getElementById('addCAdminForm');
+  f.style.display='flex';
+  f.innerHTML=`
+    <div class="panel-title" style="font-size:15px">Promote User to Company Admin</div>
+    <div class="section-lbl" style="margin-top:0">User Email / ID</div>
+    <input type="text" id="cadminUserId" class="field-input" placeholder="Paste user UUID or search by name" style="max-width:380px">
+    <div id="cadminSearch" style="margin-top:6px"></div>
+    <button class="action-btn" onclick="promoteToCompanyAdmin()">Promote to Company Admin →</button>
+    <div id="cadminMsg" class="auth-msg"></div>`;
+  document.getElementById('cadminUserId').addEventListener('input',async function(){
+    const v=this.value.trim();
+    if(v.length<2){document.getElementById('cadminSearch').innerHTML='';return;}
+    const {data:found=[]}=await sb.from('profiles').select('id,name,role').ilike('name','%'+v+'%').limit(5);
+    document.getElementById('cadminSearch').innerHTML=found.length===0?'<div class="no-data">No users found</div>':
+      found.map(u=>`<div style="padding:5px 8px;cursor:pointer;font-size:12px;border-radius:4px;background:var(--g1);margin-bottom:3px" onclick="document.getElementById('cadminUserId').value='${u.id}';document.getElementById('cadminSearch').innerHTML=''">
+        <strong>${u.name}</strong> <span class="tbl-badge ${u.role}" style="font-size:9px">${u.role}</span></div>`).join('');
+  });
+}
+
+async function promoteToCompanyAdmin(){
+  const uid=document.getElementById('cadminUserId').value.trim();
+  if(!uid){showMsg('cadminMsg','Please enter a user ID','error');return;}
+  loading(true,'Promoting user…');
+  const {error}=await sb.from('profiles').update({role:'company_admin'}).eq('id',uid);
+  loading(false);
+  if(error){showMsg('cadminMsg','Error: '+error.message,'error');return;}
+  showMsg('cadminMsg','User promoted to Company Admin!','success');
+  setTimeout(()=>showPanel('companies'),1000);
+}
+
+async function showAssignEngineers(cadminId,cadminName){
+  const f=document.getElementById('assignEngForm');
+  f.style.display='flex';
+  f.innerHTML=`<div class="panel-title" style="font-size:15px">Assign Engineers to ${cadminName}</div><div class="empty-state"><span class="empty-state-icon">⏳</span></div>`;
+  const {data:engineers=[]}=await sb.from('profiles').select('id,name,company_admin_id').eq('role','engineer');
+  f.innerHTML=`
+    <div class="panel-title" style="font-size:15px">Assign Engineers to ${cadminName}</div>
+    <div class="section-lbl" style="margin-top:0">Select engineers to assign to this company admin</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;">
+      ${engineers.map(e=>`<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:5px 8px;background:var(--g1);border-radius:5px">
+        <input type="checkbox" value="${e.id}" ${e.company_admin_id===cadminId?'checked':''} style="accent-color:var(--orange)">
+        <strong>${e.name}</strong>
+        ${e.company_admin_id&&e.company_admin_id!==cadminId?'<span class="tbl-badge pending" style="font-size:9px">Other company</span>':''}
+      </label>`).join('')}
+    </div>
+    <button class="action-btn" onclick="saveEngineerAssignments('${cadminId}')">Save Assignments →</button>
+    <div id="assignMsg" class="auth-msg"></div>`;
+}
+
+async function saveEngineerAssignments(cadminId){
+  const checks=[...document.querySelectorAll('#assignEngForm input[type=checkbox]')];
+  const toAssign=checks.filter(c=>c.checked).map(c=>c.value);
+  const toUnassign=checks.filter(c=>!c.checked).map(c=>c.value);
+  loading(true,'Saving…');
+  if(toAssign.length) await sb.from('profiles').update({company_admin_id:cadminId}).in('id',toAssign);
+  if(toUnassign.length) await sb.from('profiles').update({company_admin_id:null}).in('id',toUnassign);
+  loading(false);
+  showMsg('assignMsg','Assignments saved!','success');
+  setTimeout(()=>showPanel('companies'),800);
+}
+
+/* ── Company Admin panels ── */
+async function renderMyEngineers(el){
+  const uid=S.profile.id;
+  const {data:engineers=[]}=await sb.from('profiles').select('id,name,role,created_at').eq('company_admin_id',uid).order('created_at');
+  el.innerHTML=`
+    <div class="flex-row">
+      <div class="panel-title">My Engineers</div>
+      <button class="action-btn" onclick="showPanel('addEngineer')" style="margin-left:auto">+ Add Engineer</button>
+    </div>
+    ${engineers.length===0?'<div class="empty-state"><span class="empty-state-icon">🧑‍🔧</span><div class="empty-state-text">No engineers yet. Add one to get started.</div></div>':`
+    <table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
+    <tbody>${engineers.map(u=>`<tr>
+      <td><strong>${u.name}</strong></td>
+      <td><span class="tbl-badge engineer">Engineer</span></td>
+      <td>${new Date(u.created_at).toLocaleDateString()}</td>
+      <td>
+        <button class="tbl-btn view" onclick="showEngineerProjects('${u.id}','${u.name}')">Projects</button>
+        <button class="tbl-btn delete" onclick="removeEngineerFromCompany('${u.id}')">Remove</button>
+      </td></tr>`).join('')}</tbody></table>`}`;
+}
+
+async function showEngineerProjects(engId,engName){
+  const {data:projects=[]}=await sb.from('projects').select('id,name,parts,access_requests(id,status)').eq('owner_id',engId);
+  const main=document.getElementById('dashMain');
+  main.innerHTML=`
+    <div class="flex-row">
+      <div class="panel-title">Projects — ${engName}</div>
+      <button class="action-btn" style="margin-left:auto;background:var(--g2);color:var(--black)" onclick="showPanel('myengineers')">← Back</button>
+    </div>
+    ${projects.length===0?'<div class="empty-state"><span class="empty-state-icon">📁</span><div class="empty-state-text">No projects yet.</div></div>':`
+    <table class="data-table"><thead><tr><th>Project</th><th>Parts</th><th>Customers</th><th>Pending</th><th>Actions</th></tr></thead>
+    <tbody>${projects.map(p=>projRow(p)).join('')}</tbody></table>`}`;
+}
+
+async function removeEngineerFromCompany(engId){
+  if(!confirm('Remove this engineer from your company? They will keep their account but lose company association.')) return;
+  loading(true);
+  await sb.from('profiles').update({company_admin_id:null}).eq('id',engId);
+  loading(false);
+  showPanel('myengineers');
+}
+
+function renderAddEngineer(el){
+  el.innerHTML=`
+    <div class="panel-title">Add Engineer to Company</div>
+    <div class="create-form">
+      <div class="info-msg">Search for an existing engineer account to add to your company, or invite a new one.</div>
+      <div>
+        <div class="section-lbl" style="margin-top:0">Search by Name</div>
+        <input type="text" id="engSearch" class="field-input" placeholder="Type engineer name…" style="max-width:340px">
+        <div id="engSearchResults" style="margin-top:8px"></div>
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="section-lbl">Or Register a New Engineer Account</div>
+      <div class="field-group"><label class="field-label">Full Name</label><input type="text" id="newEngName" class="field-input" placeholder="Jane Smith" style="max-width:340px"></div>
+      <div class="field-group"><label class="field-label">Email</label><input type="email" id="newEngEmail" class="field-input" placeholder="jane@company.com" style="max-width:340px"></div>
+      <div class="field-group"><label class="field-label">Temporary Password</label><input type="password" id="newEngPass" class="field-input" placeholder="Min 6 characters" style="max-width:340px"></div>
+      <button class="action-btn" onclick="registerAndAssignEngineer()">Register &amp; Add Engineer →</button>
+      <div id="addEngMsg" class="auth-msg"></div>
+    </div>`;
+  document.getElementById('engSearch').addEventListener('input',async function(){
+    const v=this.value.trim();
+    const res=document.getElementById('engSearchResults');
+    if(v.length<2){res.innerHTML='';return;}
+    const {data:found=[]}=await sb.from('profiles').select('id,name,company_admin_id').eq('role','engineer').ilike('name','%'+v+'%').limit(8);
+    res.innerHTML=found.length===0?'<div class="no-data">No engineers found</div>':
+      found.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--g1);border-radius:5px;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:600">${u.name}</span>
+        ${u.company_admin_id===S.profile.id?'<span class="tbl-badge approved">Already yours</span>':
+          u.company_admin_id?'<span class="tbl-badge pending">Other company</span>':
+          `<button class="tbl-btn approve" onclick="assignEngineerToMe('${u.id}','${u.name}')">Add to Company</button>`}
+      </div>`).join('');
+  });
+}
+
+async function assignEngineerToMe(engId,engName){
+  loading(true);
+  await sb.from('profiles').update({company_admin_id:S.profile.id}).eq('id',engId);
+  loading(false);
+  alert(`${engName} added to your company!`);
+  showPanel('myengineers');
+}
+
+async function registerAndAssignEngineer(){
+  const name=document.getElementById('newEngName').value.trim();
+  const email=document.getElementById('newEngEmail').value.trim();
+  const pass=document.getElementById('newEngPass').value;
+  if(!name||!email||!pass){showMsg('addEngMsg','Please fill in all fields','error');return;}
+  if(pass.length<6){showMsg('addEngMsg','Password must be at least 6 characters','error');return;}
+  loading(true,'Creating engineer account…');
+  const {data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){loading(false);showMsg('addEngMsg',error.message,'error');return;}
+  const {error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role:'engineer',company_admin_id:S.profile.id});
+  loading(false);
+  if(pe){showMsg('addEngMsg','Account created but profile failed: '+pe.message,'error');return;}
+  showMsg('addEngMsg',`Engineer "${name}" created and added to your company!`,'success');
+  setTimeout(()=>showPanel('myengineers'),1200);
+}
+
+async function renderCompanyProjects(el){
+  const uid=S.profile.id;
+  const {data:myEngs=[]}=await sb.from('profiles').select('id').eq('company_admin_id',uid);
+  const engIds=myEngs.map(e=>e.id); engIds.push(uid);
+  let q=sb.from('projects').select('id,name,created_at,parts,owner_id,access_requests(id,status),profiles(name)').in('owner_id',engIds).order('created_at',{ascending:false});
+  const {data:projects=[]}=await q;
+  el.innerHTML=`<div class="panel-title">All Company Projects</div>
+    ${projects.length===0?'<div class="empty-state"><span class="empty-state-icon">📁</span><div class="empty-state-text">No company projects yet.</div></div>':`
+    <table class="data-table"><thead><tr><th>Project</th><th>Engineer</th><th>Parts</th><th>Customers</th><th>Pending</th><th>Actions</th></tr></thead>
+    <tbody>${projects.map(p=>{
+      const approved=(p.access_requests||[]).filter(r=>r.status==='approved').length;
+      const pending=(p.access_requests||[]).filter(r=>r.status==='pending').length;
+      return `<tr>
+        <td><strong>${p.name}</strong></td>
+        <td>${p.profiles?.name||'—'}</td>
+        <td>${(p.parts||[]).length}</td>
+        <td><span class="tbl-badge approved">${approved}</span></td>
+        <td>${pending>0?`<span class="tbl-badge pending">${pending}</span>`:'—'}</td>
+        <td>
+          <button class="tbl-btn view" onclick="openViewer('${p.id}')">View</button>
+          <button class="tbl-btn manage" onclick="showAccess('${p.id}','${p.name}')">Access</button>
+          <button class="tbl-btn delete" onclick="deleteProject('${p.id}')">Delete</button>
+        </td></tr>`;}).join('')}</tbody></table>`}`;
 }
 
 /* ══════════════════════════════════════
