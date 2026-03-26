@@ -291,17 +291,20 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
       <button class="sidebar-btn active" onclick="showPanel('overview')" id="nav-overview"><span>📊</span> Overview</button>
       <button class="sidebar-btn" onclick="showPanel('projects')" id="nav-projects"><span>📁</span> My Projects</button>
       <button class="sidebar-btn" onclick="showPanel('create')" id="nav-create"><span>➕</span> New Project</button>
+      <button class="sidebar-btn" onclick="showPanel('enrolCustomer')" id="nav-enrolCustomer"><span>🧑‍💼</span> Enrol Customer</button>
+      <button class="sidebar-btn" onclick="showPanel('mycustomers')" id="nav-mycustomers"><span>👥</span> My Customers</button>
       <div id="cadminNav" style="display:none">
         <div class="sidebar-section">Company Admin</div>
+        <button class="sidebar-btn" onclick="showPanel('enrolEngineer')" id="nav-enrolEngineer"><span>➕</span> Enrol Engineer</button>
         <button class="sidebar-btn" onclick="showPanel('myengineers')" id="nav-myengineers"><span>🧑‍🔧</span> My Engineers</button>
-        <button class="sidebar-btn" onclick="showPanel('addEngineer')" id="nav-addEngineer"><span>➕</span> Add Engineer</button>
         <button class="sidebar-btn" onclick="showPanel('companyprojects')" id="nav-companyprojects"><span>🗂️</span> Company Projects</button>
       </div>
       <div id="adminNav" style="display:none">
         <div class="sidebar-section">Admin</div>
+        <button class="sidebar-btn" onclick="showPanel('enrolCAdmin')" id="nav-enrolCAdmin"><span>➕</span> Enrol Company Admin</button>
+        <button class="sidebar-btn" onclick="showPanel('companies')" id="nav-companies"><span>🏢</span> Companies</button>
         <button class="sidebar-btn" onclick="showPanel('users')" id="nav-users"><span>👥</span> All Users</button>
         <button class="sidebar-btn" onclick="showPanel('allprojects')" id="nav-allprojects"><span>🗂️</span> All Projects</button>
-        <button class="sidebar-btn" onclick="showPanel('companies')" id="nav-companies"><span>🏢</span> Companies</button>
       </div>
       <div class="sidebar-divider"></div>
       <button class="logout-btn" onclick="doLogout()">↩ Sign Out</button>
@@ -495,6 +498,9 @@ function routeUser(profile){
     document.getElementById('cadminNav').style.display=profile.role==='company_admin'?'block':'none';
     // Engineers can create projects; company_admin and admin cannot from nav
     document.getElementById('nav-create').style.display=profile.role==='engineer'?'flex':'none';
+    // Enrol Customer and My Customers only for engineers
+    document.getElementById('nav-enrolCustomer').style.display=profile.role==='engineer'?'flex':'none';
+    document.getElementById('nav-mycustomers').style.display=profile.role==='engineer'?'flex':'none';
     // company_admin sees My Projects to view their company's projects
     document.getElementById('nav-projects').style.display=(profile.role==='engineer'||profile.role==='company_admin')?'flex':'none';
     showPage('dashPage');
@@ -526,15 +532,18 @@ async function showPanel(panel){
   setNav(panel);
   const main=document.getElementById('dashMain');
   main.innerHTML='<div class="empty-state"><span class="empty-state-icon">⏳</span></div>';
-  if(panel==='overview')          await renderOverview(main);
-  else if(panel==='projects')     await renderMyProjects(main);
-  else if(panel==='create')       renderCreateProject(main);
-  else if(panel==='users')        await renderUsers(main);
-  else if(panel==='allprojects')  await renderAllProjects(main);
-  else if(panel==='companies')    await renderCompanies(main);
-  else if(panel==='myengineers')  await renderMyEngineers(main);
-  else if(panel==='addEngineer')  renderAddEngineer(main);
+  if(panel==='overview')             await renderOverview(main);
+  else if(panel==='projects')        await renderMyProjects(main);
+  else if(panel==='create')          renderCreateProject(main);
+  else if(panel==='users')           await renderUsers(main);
+  else if(panel==='allprojects')     await renderAllProjects(main);
+  else if(panel==='companies')       await renderCompanies(main);
+  else if(panel==='enrolCAdmin')     renderEnrolCAdmin(main);
+  else if(panel==='myengineers')     await renderMyEngineers(main);
+  else if(panel==='enrolEngineer')   renderEnrolEngineer(main);
   else if(panel==='companyprojects') await renderCompanyProjects(main);
+  else if(panel==='enrolCustomer')   renderEnrolCustomer(main);
+  else if(panel==='mycustomers')     await renderMyCustomers(main);
 }
 
 async function renderOverview(el){
@@ -633,60 +642,89 @@ async function renderAllProjects(el){
       </td></tr>`).join('')}</tbody></table>`;
 }
 
-/* ── Companies panel (admin: manage company admins) ── */
+/* ── Admin: Enrol Company Admin ── */
+function renderEnrolCAdmin(el){
+  el.innerHTML=`
+    <div class="panel-title">Enrol Company Admin</div>
+    <div class="create-form">
+      <div class="info-msg">Create a brand-new Company Admin account directly, or promote an existing engineer/user.</div>
+      <div class="section-lbl" style="margin-top:0;font-size:11px">Register New Company Admin</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field-group" style="margin:0"><label class="field-label">Full Name</label><input type="text" id="enrolCAName" class="field-input" placeholder="Acme Corp Admin"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Company Name</label><input type="text" id="enrolCACompany" class="field-input" placeholder="Acme Corp"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Email</label><input type="email" id="enrolCAEmail" class="field-input" placeholder="admin@acme.com"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Temporary Password</label><input type="password" id="enrolCAPass" class="field-input" placeholder="Min 6 characters"></div>
+      </div>
+      <button class="action-btn" onclick="enrolNewCAdmin()">Create &amp; Enrol Company Admin →</button>
+      <div id="enrolCAMsg" class="auth-msg"></div>
+      <div class="sidebar-divider"></div>
+      <div class="section-lbl">Promote Existing User to Company Admin</div>
+      <input type="text" id="promoteCASearch" class="field-input" placeholder="Search by name…" style="max-width:340px">
+      <div id="promoteCAResults" style="margin-top:8px"></div>
+    </div>`;
+  document.getElementById('promoteCASearch').addEventListener('input',async function(){
+    const v=this.value.trim();
+    const res=document.getElementById('promoteCAResults');
+    if(v.length<2){res.innerHTML='';return;}
+    const {data:found=[]}=await sb.from('profiles').select('id,name,role').ilike('name','%'+v+'%').neq('role','admin').neq('role','customer').limit(8);
+    res.innerHTML=found.length===0?'<div class="no-data">No users found</div>':
+      found.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--g1);border-radius:5px;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:600">${u.name} <span class="tbl-badge ${u.role}" style="font-size:9px">${u.role==='company_admin'?'Already CA':u.role}</span></span>
+        ${u.role==='company_admin'?'':'<button class="tbl-btn manage" onclick="promoteUserToCAdmin(\''+u.id+'\',\''+u.name+'\')">Promote to Company Admin</button>'}
+      </div>`).join('');
+  });
+}
+
+async function enrolNewCAdmin(){
+  const name=document.getElementById('enrolCAName').value.trim();
+  const company=document.getElementById('enrolCACompany').value.trim();
+  const email=document.getElementById('enrolCAEmail').value.trim();
+  const pass=document.getElementById('enrolCAPass').value;
+  if(!name||!email||!pass){showMsg('enrolCAMsg','Please fill in all required fields','error');return;}
+  if(pass.length<6){showMsg('enrolCAMsg','Password must be at least 6 characters','error');return;}
+  loading(true,'Creating Company Admin account…');
+  const {data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){loading(false);showMsg('enrolCAMsg',error.message,'error');return;}
+  const {error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role:'company_admin',company_name:company||null});
+  loading(false);
+  if(pe){showMsg('enrolCAMsg','Auth account created but profile failed: '+pe.message,'error');return;}
+  showMsg('enrolCAMsg',`Company Admin "${name}" enrolled successfully! They can now log in.`,'success');
+  document.getElementById('enrolCAName').value='';
+  document.getElementById('enrolCACompany').value='';
+  document.getElementById('enrolCAEmail').value='';
+  document.getElementById('enrolCAPass').value='';
+}
+
+async function promoteUserToCAdmin(uid,uname){
+  if(!confirm(`Promote "${uname}" to Company Admin?`)) return;
+  loading(true,'Promoting…');
+  await sb.from('profiles').update({role:'company_admin'}).eq('id',uid);
+  loading(false);
+  document.getElementById('promoteCAResults').innerHTML=`<div class="auth-msg success" style="display:block">"${uname}" promoted to Company Admin!</div>`;
+}
+
+/* ── Admin: Companies panel ── */
 async function renderCompanies(el){
   const {data:cadmins=[]}=await sb.from('profiles').select('*').eq('role','company_admin').order('created_at');
-  const {data:allUsers=[]}=await sb.from('profiles').select('id,name,role,company_admin_id').neq('role','admin').neq('role','company_admin').neq('role','customer');
+  const {data:allEngs=[]}=await sb.from('profiles').select('id,company_admin_id').eq('role','engineer');
   el.innerHTML=`
     <div class="flex-row">
-      <div class="panel-title">Company Admins</div>
-      <button class="action-btn" onclick="showAddCompanyAdmin()" style="margin-left:auto">+ Add Company Admin</button>
+      <div class="panel-title">All Company Admins</div>
+      <button class="action-btn" onclick="showPanel('enrolCAdmin')" style="margin-left:auto">+ Enrol New Company Admin</button>
     </div>
-    ${cadmins.length===0?'<div class="empty-state"><span class="empty-state-icon">🏢</span><div class="empty-state-text">No company admins yet.</div></div>':`
-    <table class="data-table"><thead><tr><th>Name</th><th>ID</th><th>Engineers</th><th>Actions</th></tr></thead>
+    ${cadmins.length===0?'<div class="empty-state"><span class="empty-state-icon">🏢</span><div class="empty-state-text">No company admins yet.<br>Use "Enrol Company Admin" to add the first one.</div></div>':`
+    <table class="data-table"><thead><tr><th>Name</th><th>Company</th><th>Engineers</th><th>Actions</th></tr></thead>
     <tbody>${cadmins.map(ca=>{
-      const engCount=allUsers.filter(u=>u.company_admin_id===ca.id).length;
+      const engCount=allEngs.filter(e=>e.company_admin_id===ca.id).length;
       return `<tr>
         <td><strong>${ca.name}</strong></td>
-        <td style="font-size:10px;color:var(--g3)">${ca.id.substring(0,16)}…</td>
+        <td>${ca.company_name||'—'}</td>
         <td><span class="tbl-badge approved">${engCount}</span></td>
         <td>
           <button class="tbl-btn manage" onclick="showAssignEngineers('${ca.id}','${ca.name}')">Assign Engineers</button>
           <button class="tbl-btn delete" onclick="deleteUser('${ca.id}')">Remove</button>
         </td></tr>`;}).join('')}</tbody></table>`}
-    <div id="addCAdminForm" style="display:none" class="create-form" style="margin-top:14px"></div>
-    <div id="assignEngForm" style="display:none" class="create-form" style="margin-top:14px"></div>`;
-}
-
-function showAddCompanyAdmin(){
-  const f=document.getElementById('addCAdminForm');
-  f.style.display='flex';
-  f.innerHTML=`
-    <div class="panel-title" style="font-size:15px">Promote User to Company Admin</div>
-    <div class="section-lbl" style="margin-top:0">User Email / ID</div>
-    <input type="text" id="cadminUserId" class="field-input" placeholder="Paste user UUID or search by name" style="max-width:380px">
-    <div id="cadminSearch" style="margin-top:6px"></div>
-    <button class="action-btn" onclick="promoteToCompanyAdmin()">Promote to Company Admin →</button>
-    <div id="cadminMsg" class="auth-msg"></div>`;
-  document.getElementById('cadminUserId').addEventListener('input',async function(){
-    const v=this.value.trim();
-    if(v.length<2){document.getElementById('cadminSearch').innerHTML='';return;}
-    const {data:found=[]}=await sb.from('profiles').select('id,name,role').ilike('name','%'+v+'%').limit(5);
-    document.getElementById('cadminSearch').innerHTML=found.length===0?'<div class="no-data">No users found</div>':
-      found.map(u=>`<div style="padding:5px 8px;cursor:pointer;font-size:12px;border-radius:4px;background:var(--g1);margin-bottom:3px" onclick="document.getElementById('cadminUserId').value='${u.id}';document.getElementById('cadminSearch').innerHTML=''">
-        <strong>${u.name}</strong> <span class="tbl-badge ${u.role}" style="font-size:9px">${u.role}</span></div>`).join('');
-  });
-}
-
-async function promoteToCompanyAdmin(){
-  const uid=document.getElementById('cadminUserId').value.trim();
-  if(!uid){showMsg('cadminMsg','Please enter a user ID','error');return;}
-  loading(true,'Promoting user…');
-  const {error}=await sb.from('profiles').update({role:'company_admin'}).eq('id',uid);
-  loading(false);
-  if(error){showMsg('cadminMsg','Error: '+error.message,'error');return;}
-  showMsg('cadminMsg','User promoted to Company Admin!','success');
-  setTimeout(()=>showPanel('companies'),1000);
+    <div id="assignEngForm" style="display:none;margin-top:14px" class="create-form"></div>`;
 }
 
 async function showAssignEngineers(cadminId,cadminName){
@@ -762,61 +800,66 @@ async function removeEngineerFromCompany(engId){
   showPanel('myengineers');
 }
 
-function renderAddEngineer(el){
+/* ── Company Admin: Enrol Engineer ── */
+function renderEnrolEngineer(el){
   el.innerHTML=`
-    <div class="panel-title">Add Engineer to Company</div>
+    <div class="panel-title">Enrol Engineer</div>
     <div class="create-form">
-      <div class="info-msg">Search for an existing engineer account to add to your company, or invite a new one.</div>
-      <div>
-        <div class="section-lbl" style="margin-top:0">Search by Name</div>
-        <input type="text" id="engSearch" class="field-input" placeholder="Type engineer name…" style="max-width:340px">
-        <div id="engSearchResults" style="margin-top:8px"></div>
+      <div class="info-msg">Create a new Engineer account and automatically assign them to your company.</div>
+      <div class="section-lbl" style="margin-top:0">Register New Engineer</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field-group" style="margin:0"><label class="field-label">Full Name</label><input type="text" id="enrolEngName" class="field-input" placeholder="John Smith"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Job Title</label><input type="text" id="enrolEngTitle" class="field-input" placeholder="Weld Engineer"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Email</label><input type="email" id="enrolEngEmail" class="field-input" placeholder="john@company.com"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Temporary Password</label><input type="password" id="enrolEngPass" class="field-input" placeholder="Min 6 characters"></div>
       </div>
+      <button class="action-btn" onclick="enrolNewEngineer()">Create &amp; Enrol Engineer →</button>
+      <div id="enrolEngMsg" class="auth-msg"></div>
       <div class="sidebar-divider"></div>
-      <div class="section-lbl">Or Register a New Engineer Account</div>
-      <div class="field-group"><label class="field-label">Full Name</label><input type="text" id="newEngName" class="field-input" placeholder="Jane Smith" style="max-width:340px"></div>
-      <div class="field-group"><label class="field-label">Email</label><input type="email" id="newEngEmail" class="field-input" placeholder="jane@company.com" style="max-width:340px"></div>
-      <div class="field-group"><label class="field-label">Temporary Password</label><input type="password" id="newEngPass" class="field-input" placeholder="Min 6 characters" style="max-width:340px"></div>
-      <button class="action-btn" onclick="registerAndAssignEngineer()">Register &amp; Add Engineer →</button>
-      <div id="addEngMsg" class="auth-msg"></div>
+      <div class="section-lbl">Add Existing Engineer to Your Company</div>
+      <input type="text" id="enrolEngSearch" class="field-input" placeholder="Search by name…" style="max-width:340px">
+      <div id="enrolEngSearchResults" style="margin-top:8px"></div>
     </div>`;
-  document.getElementById('engSearch').addEventListener('input',async function(){
+  document.getElementById('enrolEngSearch').addEventListener('input',async function(){
     const v=this.value.trim();
-    const res=document.getElementById('engSearchResults');
+    const res=document.getElementById('enrolEngSearchResults');
     if(v.length<2){res.innerHTML='';return;}
     const {data:found=[]}=await sb.from('profiles').select('id,name,company_admin_id').eq('role','engineer').ilike('name','%'+v+'%').limit(8);
     res.innerHTML=found.length===0?'<div class="no-data">No engineers found</div>':
       found.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--g1);border-radius:5px;margin-bottom:4px">
         <span style="font-size:12px;font-weight:600">${u.name}</span>
-        ${u.company_admin_id===S.profile.id?'<span class="tbl-badge approved">Already yours</span>':
-          u.company_admin_id?'<span class="tbl-badge pending">Other company</span>':
-          `<button class="tbl-btn approve" onclick="assignEngineerToMe('${u.id}','${u.name}')">Add to Company</button>`}
+        ${u.company_admin_id===S.profile.id?'<span class="tbl-badge approved">Already in your company</span>':
+          u.company_admin_id?'<span class="tbl-badge pending">Belongs to another company</span>':
+          `<button class="tbl-btn approve" onclick="assignEngineerToMe('${u.id}','${u.name}')">Add to My Company</button>`}
       </div>`).join('');
   });
+}
+
+async function enrolNewEngineer(){
+  const name=document.getElementById('enrolEngName').value.trim();
+  const title=document.getElementById('enrolEngTitle').value.trim();
+  const email=document.getElementById('enrolEngEmail').value.trim();
+  const pass=document.getElementById('enrolEngPass').value;
+  if(!name||!email||!pass){showMsg('enrolEngMsg','Please fill in all required fields','error');return;}
+  if(pass.length<6){showMsg('enrolEngMsg','Password must be at least 6 characters','error');return;}
+  loading(true,'Creating Engineer account…');
+  const {data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){loading(false);showMsg('enrolEngMsg',error.message,'error');return;}
+  const {error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role:'engineer',company_admin_id:S.profile.id,job_title:title||null});
+  loading(false);
+  if(pe){showMsg('enrolEngMsg','Auth account created but profile failed: '+pe.message,'error');return;}
+  showMsg('enrolEngMsg',`Engineer "${name}" enrolled and added to your company!`,'success');
+  document.getElementById('enrolEngName').value='';
+  document.getElementById('enrolEngTitle').value='';
+  document.getElementById('enrolEngEmail').value='';
+  document.getElementById('enrolEngPass').value='';
 }
 
 async function assignEngineerToMe(engId,engName){
   loading(true);
   await sb.from('profiles').update({company_admin_id:S.profile.id}).eq('id',engId);
   loading(false);
-  alert(`${engName} added to your company!`);
-  showPanel('myengineers');
-}
-
-async function registerAndAssignEngineer(){
-  const name=document.getElementById('newEngName').value.trim();
-  const email=document.getElementById('newEngEmail').value.trim();
-  const pass=document.getElementById('newEngPass').value;
-  if(!name||!email||!pass){showMsg('addEngMsg','Please fill in all fields','error');return;}
-  if(pass.length<6){showMsg('addEngMsg','Password must be at least 6 characters','error');return;}
-  loading(true,'Creating engineer account…');
-  const {data,error}=await sb.auth.signUp({email,password:pass});
-  if(error){loading(false);showMsg('addEngMsg',error.message,'error');return;}
-  const {error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role:'engineer',company_admin_id:S.profile.id});
-  loading(false);
-  if(pe){showMsg('addEngMsg','Account created but profile failed: '+pe.message,'error');return;}
-  showMsg('addEngMsg',`Engineer "${name}" created and added to your company!`,'success');
-  setTimeout(()=>showPanel('myengineers'),1200);
+  document.getElementById('enrolEngSearchResults').innerHTML=`<div class="auth-msg success" style="display:block">"${engName}" added to your company!</div>`;
 }
 
 async function renderCompanyProjects(el){
@@ -842,6 +885,121 @@ async function renderCompanyProjects(el){
           <button class="tbl-btn manage" onclick="showAccess('${p.id}','${p.name}')">Access</button>
           <button class="tbl-btn delete" onclick="deleteProject('${p.id}')">Delete</button>
         </td></tr>`;}).join('')}</tbody></table>`}`;
+}
+
+/* ══ ENGINEER: ENROL CUSTOMER ══ */
+function renderEnrolCustomer(el){
+  el.innerHTML=`
+    <div class="panel-title">Enrol Customer</div>
+    <div class="create-form">
+      <div class="info-msg">Create a Customer account and immediately grant them access to one of your projects.</div>
+      <div class="section-lbl" style="margin-top:0">Customer Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field-group" style="margin:0"><label class="field-label">Full Name</label><input type="text" id="enrolCustName" class="field-input" placeholder="Customer Name"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Company / Organisation</label><input type="text" id="enrolCustOrg" class="field-input" placeholder="Customer Corp Ltd"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Email</label><input type="email" id="enrolCustEmail" class="field-input" placeholder="contact@customer.com"></div>
+        <div class="field-group" style="margin:0"><label class="field-label">Temporary Password</label><input type="password" id="enrolCustPass" class="field-input" placeholder="Min 6 characters"></div>
+      </div>
+      <div class="section-lbl">Grant Access to Project <span style="font-weight:400;color:var(--g3)">(optional — can also grant later)</span></div>
+      <select id="enrolCustProject" class="field-select" style="max-width:340px">
+        <option value="">— No project yet —</option>
+      </select>
+      <button class="action-btn" onclick="enrolNewCustomer()">Create &amp; Enrol Customer →</button>
+      <div id="enrolCustMsg" class="auth-msg"></div>
+      <div class="sidebar-divider"></div>
+      <div class="section-lbl">Or Share a Project Link for Self-Registration</div>
+      <div style="font-size:12px;color:var(--g3);margin-bottom:8px">Customer registers themselves, then you approve their access request below.</div>
+      <select id="shareProjSelect" class="field-select" style="max-width:340px">
+        <option value="">Select a project…</option>
+      </select>
+      <div id="shareProjLink" class="share-link-box" style="display:none;margin-top:8px"></div>
+      <div class="modal-btns" id="shareProjBtns" style="display:none">
+        <button class="tbl-btn copy" onclick="copyShareLink()">📋 Copy Link</button>
+      </div>
+    </div>`;
+  // Load projects into selects
+  (async()=>{
+    const {data:projs=[]}=await sb.from('projects').select('id,name').eq('owner_id',S.profile.id).order('name');
+    const opts=projs.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    document.getElementById('enrolCustProject').innerHTML+= opts;
+    document.getElementById('shareProjSelect').innerHTML+= opts;
+  })();
+  document.getElementById('shareProjSelect').addEventListener('change',function(){
+    if(!this.value){document.getElementById('shareProjLink').style.display='none';document.getElementById('shareProjBtns').style.display='none';return;}
+    const link=`${window.location.origin}${window.location.pathname}?project=${this.value}`;
+    document.getElementById('shareProjLink').innerText=link;
+    document.getElementById('shareProjLink').style.display='block';
+    document.getElementById('shareProjBtns').style.display='flex';
+  });
+}
+
+function copyShareLink(){
+  navigator.clipboard.writeText(document.getElementById('shareProjLink').innerText).then(()=>alert('Link copied!'));
+}
+
+async function enrolNewCustomer(){
+  const name=document.getElementById('enrolCustName').value.trim();
+  const org=document.getElementById('enrolCustOrg').value.trim();
+  const email=document.getElementById('enrolCustEmail').value.trim();
+  const pass=document.getElementById('enrolCustPass').value;
+  const projId=document.getElementById('enrolCustProject').value;
+  if(!name||!email||!pass){showMsg('enrolCustMsg','Please fill in all required fields','error');return;}
+  if(pass.length<6){showMsg('enrolCustMsg','Password must be at least 6 characters','error');return;}
+  loading(true,'Creating Customer account…');
+  const {data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){loading(false);showMsg('enrolCustMsg',error.message,'error');return;}
+  const {error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role:'customer',company_name:org||null});
+  if(pe){loading(false);showMsg('enrolCustMsg','Auth account created but profile failed: '+pe.message,'error');return;}
+  // If a project was selected, create an approved access request immediately
+  if(projId){
+    await sb.from('access_requests').insert({project_id:projId,user_id:data.user.id,status:'approved'});
+  }
+  loading(false);
+  showMsg('enrolCustMsg',`Customer "${name}" enrolled successfully!${projId?' Project access granted.':' Use My Customers to assign projects later.'}`,'success');
+  document.getElementById('enrolCustName').value='';
+  document.getElementById('enrolCustOrg').value='';
+  document.getElementById('enrolCustEmail').value='';
+  document.getElementById('enrolCustPass').value='';
+  document.getElementById('enrolCustProject').selectedIndex=0;
+}
+
+/* ── Engineer: My Customers ── */
+async function renderMyCustomers(el){
+  const uid=S.profile.id;
+  // Get all access requests for this engineer's projects
+  const {data:projs=[]}=await sb.from('projects').select('id,name').eq('owner_id',uid);
+  if(projs.length===0){
+    el.innerHTML=`<div class="panel-title">My Customers</div><div class="empty-state"><span class="empty-state-icon">🔒</span><div class="empty-state-text">No projects yet. Create a project first, then enrol customers.</div></div>`;
+    return;
+  }
+  const projIds=projs.map(p=>p.id);
+  const projMap=Object.fromEntries(projs.map(p=>[p.id,p.name]));
+  const {data:reqs=[]}=await sb.from('access_requests').select('id,status,project_id,requested_at,user_id,profiles(name,company_name)').in('project_id',projIds).order('requested_at',{ascending:false});
+  el.innerHTML=`
+    <div class="flex-row">
+      <div class="panel-title">My Customers</div>
+      <button class="action-btn" onclick="showPanel('enrolCustomer')" style="margin-left:auto">+ Enrol Customer</button>
+    </div>
+    ${reqs.length===0?'<div class="empty-state"><span class="empty-state-icon">👥</span><div class="empty-state-text">No customers yet. Enrol one or share a project link.</div></div>':`
+    <table class="data-table"><thead><tr><th>Customer</th><th>Organisation</th><th>Project</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+    <tbody>${reqs.map(r=>`<tr>
+      <td><strong>${r.profiles?.name||'Unknown'}</strong></td>
+      <td>${r.profiles?.company_name||'—'}</td>
+      <td>${projMap[r.project_id]||'—'}</td>
+      <td><span class="tbl-badge ${r.status}">${r.status}</span></td>
+      <td>${new Date(r.requested_at).toLocaleDateString()}</td>
+      <td>
+        ${r.status==='pending'?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Approve</button>`:''}
+        ${r.status==='approved'?`<button class="tbl-btn revoke" onclick="setAccessAndRefresh('${r.id}','revoked')">Revoke</button>`:''}
+        ${r.status==='revoked'?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Re-approve</button>`:''}
+      </td></tr>`).join('')}</tbody></table>`}`;
+}
+
+async function setAccessAndRefresh(reqId,status){
+  loading(true);
+  await sb.from('access_requests').update({status}).eq('id',reqId);
+  loading(false);
+  showPanel('mycustomers');
 }
 
 /* ══════════════════════════════════════
