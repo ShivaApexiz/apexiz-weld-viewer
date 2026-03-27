@@ -47,7 +47,7 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
 
 /* ══ AUTH ══ */
 #authPage .page-body{align-items:center;justify-content:center;background:#EFEFEF;}
-.auth-card{background:var(--white);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.12);padding:38px 42px;width:400px;border-top:4px solid var(--orange);animation:fadeUp 0.35s ease;}
+.auth-card{background:var(--white);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.12);padding:38px 42px;width:420px;border-top:4px solid var(--orange);animation:fadeUp 0.35s ease;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
 .auth-logo{height:38px;margin-bottom:22px;display:block;}
 .auth-logo-text{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:var(--orange);letter-spacing:2px;margin-bottom:22px;}
@@ -60,8 +60,20 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
 .field-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--g3);margin-bottom:4px;display:block;}
 .field-input{width:100%;padding:9px 13px;border:1.5px solid var(--g2);border-radius:6px;font-family:'Barlow',sans-serif;font-size:13px;color:var(--black);background:var(--white);outline:none;transition:border-color 0.15s;}
 .field-input:focus{border-color:var(--orange);}
+.field-input[readonly]{background:var(--g1);color:var(--g3);cursor:not-allowed;}
 .field-select{width:100%;padding:9px 13px;border:1.5px solid var(--g2);border-radius:6px;font-family:'Barlow',sans-serif;font-size:13px;color:var(--black);background:var(--white);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23767676' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;}
 .field-select:focus{border-color:var(--orange);}
+
+/* Role display pill shown during invite registration (replaces the select) */
+.role-pill-display{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 14px;border-radius:6px;font-size:13px;font-weight:700;
+  border:1.5px solid transparent;
+}
+.role-pill-display.company_admin{background:#E8F0FE;border-color:#1A73E8;color:#1A73E8;}
+.role-pill-display.engineer{background:var(--orange-light);border-color:var(--orange);color:var(--orange);}
+.role-pill-display.customer{background:var(--g1);border-color:var(--g2);color:var(--g4);}
+
 .auth-btn{width:100%;padding:11px 0;background:var(--orange);color:var(--white);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;border-radius:30px;cursor:pointer;transition:background 0.15s;margin-top:4px;}
 .auth-btn:hover{background:var(--orange-dark);}
 .auth-btn:disabled{background:var(--g2);color:var(--g3);cursor:not-allowed;}
@@ -247,29 +259,51 @@ body{font-family:'Barlow','Segoe UI',sans-serif;background:#EFEFEF;color:var(--b
         <button class="auth-tab active" onclick="switchTab('login')">Login</button>
         <button class="auth-tab" onclick="switchTab('register')">Register</button>
       </div>
+
+      <!-- LOGIN FORM -->
       <div id="loginForm">
         <div class="field-group"><label class="field-label">Email</label><input type="email" id="loginEmail" class="field-input" placeholder="your@email.com"></div>
         <div class="field-group"><label class="field-label">Password</label><input type="password" id="loginPassword" class="field-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <button class="auth-btn" onclick="doLogin()">Sign In →</button>
         <div id="loginMsg" class="auth-msg"></div>
       </div>
+
+      <!-- REGISTER FORM -->
       <div id="registerForm" style="display:none">
+        <!-- Invite banner — shown only when arriving via invite link -->
         <div id="inviteBanner" style="display:none;background:var(--orange-light);border:1px solid var(--orange);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--orange-dark);font-weight:600;margin-bottom:14px"></div>
+
         <div class="field-group"><label class="field-label">Full Name</label><input type="text" id="regName" class="field-input" placeholder="John Smith"></div>
         <div class="field-group"><label class="field-label">Email</label><input type="email" id="regEmail" class="field-input" placeholder="your@email.com"></div>
         <div class="field-group"><label class="field-label">Password</label><input type="password" id="regPassword" class="field-input" placeholder="Min 6 characters"></div>
-        <div class="field-group" id="roleFieldGroup">
+
+        <!--
+          Role field:
+          • Open registration  → show the <select> (engineer / customer / company_admin options)
+          • Invite-link flow   → hide the select, show a read-only role pill instead
+        -->
+        <div class="field-group" id="roleSelectGroup">
           <label class="field-label">Role</label>
           <select id="regRole" class="field-select">
-            <option value="engineer">Engineer (Upload &amp; manage projects)</option>
-            <option value="customer">Customer (View shared projects)</option>
+            <option value="engineer">Engineer — Upload &amp; manage projects</option>
+            <option value="customer">Customer — View shared projects</option>
             <option value="company_admin">Company Admin</option>
           </select>
         </div>
-        <input type="hidden" id="regInviteToken" value="">
-        <input type="hidden" id="regInvitedBy" value="">
+
+        <!-- Shown instead of the select when role is locked by an invite -->
+        <div class="field-group" id="roleDisplayGroup" style="display:none">
+          <label class="field-label">Role</label>
+          <div id="rolePillDisplay" class="role-pill-display"></div>
+        </div>
+
+        <!-- Hidden fields carry invite context -->
+        <input type="hidden" id="regInviteToken"     value="">
+        <input type="hidden" id="regInvitedBy"       value="">
         <input type="hidden" id="regInviteProjectId" value="">
-        <input type="hidden" id="regRoleHidden" value="">
+        <!-- THIS is the single source of truth for role during registration -->
+        <input type="hidden" id="regRoleFinal"       value="">
+
         <button class="auth-btn" onclick="doRegister()">Create Account →</button>
         <div id="regMsg" class="auth-msg"></div>
       </div>
@@ -420,8 +454,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
    STATE
 ══════════════════════════════════════ */
 const S = {
-  user: null,       // auth user
-  profile: null,    // profiles row
+  user: null,
+  profile: null,
   csvFiles: new Map(),
   imageFiles: new Map(),
   welds1: [], welds2: [],
@@ -434,84 +468,109 @@ const S = {
    UTILS
 ══════════════════════════════════════ */
 function showPage(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-function loading(on, txt='Loading…'){ document.getElementById('loadingText').innerText=txt; document.getElementById('loadingOverlay').classList.toggle('show',on); }
+function loading(on,txt='Loading…'){ document.getElementById('loadingText').innerText=txt; document.getElementById('loadingOverlay').classList.toggle('show',on); }
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function showMsg(id,txt,type){ const e=document.getElementById(id); e.innerText=txt; e.className='auth-msg '+type; e.style.display='block'; }
 
 /* ══════════════════════════════════════
-   AUTH
+   AUTH — TAB SWITCH
 ══════════════════════════════════════ */
 function switchTab(tab){
   document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',i===(tab==='login'?0:1)));
-  document.getElementById('loginForm').style.display=tab==='login'?'block':'none';
-  document.getElementById('registerForm').style.display=tab==='register'?'block':'none';
-  document.getElementById('authTitle').innerText=tab==='login'?'Sign In':'Create Account';
+  document.getElementById('loginForm').style.display     = tab==='login'    ? 'block' : 'none';
+  document.getElementById('registerForm').style.display  = tab==='register' ? 'block' : 'none';
+  document.getElementById('authTitle').innerText = tab==='login' ? 'Sign In' : 'Create Account';
 }
 
+/* ══════════════════════════════════════
+   AUTH — LOGIN
+══════════════════════════════════════ */
 async function doLogin(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const pass=document.getElementById('loginPassword').value;
-  if(!email||!pass){showMsg('loginMsg','Please fill in all fields','error');return;}
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  if(!email||!pass){ showMsg('loginMsg','Please fill in all fields','error'); return; }
   loading(true,'Signing in…');
-  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(error){loading(false);showMsg('loginMsg',error.message,'error');return;}
+  const {data,error} = await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ loading(false); showMsg('loginMsg',error.message,'error'); return; }
   await afterAuth(data.user);
 }
 
+/* ══════════════════════════════════════
+   AUTH — REGISTER
+   Role priority (highest → lowest):
+     1. regRoleFinal hidden field  (set by invite or by select onChange)
+     2. regRole select value       (open registration fallback)
+══════════════════════════════════════ */
 async function doRegister(){
-  const name=document.getElementById('regName').value.trim();
-  const email=document.getElementById('regEmail').value.trim();
-  const pass=document.getElementById('regPassword').value;
-  const inviteToken=document.getElementById('regInviteToken').value;
-  const invitedBy=document.getElementById('regInvitedBy').value;
-  const inviteProjectId=document.getElementById('regInviteProjectId').value;
-  // Role: always read from the hidden field when invite present (disabled select value is unreliable),
-  // otherwise read from the visible select
-  const role=inviteToken
-    ? document.getElementById('regRoleHidden').value
-    : document.getElementById('regRole').value;
-  if(!name||!email||!pass){showMsg('regMsg','Please fill in all fields','error');return;}
-  if(pass.length<6){showMsg('regMsg','Password must be at least 6 characters','error');return;}
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass  = document.getElementById('regPassword').value;
+
+  const inviteToken     = document.getElementById('regInviteToken').value;
+  const invitedBy       = document.getElementById('regInvitedBy').value;
+  const inviteProjectId = document.getElementById('regInviteProjectId').value;
+
+  // ── ROLE: always read from hidden field first; fall back to select for open reg ──
+  const roleFinal = document.getElementById('regRoleFinal').value
+                  || document.getElementById('regRole').value;
+
+  if(!name||!email||!pass){ showMsg('regMsg','Please fill in all fields','error'); return; }
+  if(pass.length<6){ showMsg('regMsg','Password must be at least 6 characters','error'); return; }
+  if(!roleFinal){ showMsg('regMsg','Could not determine role. Please try again.','error'); return; }
+
   loading(true,'Creating account…');
-  const {data,error}=await sb.auth.signUp({email,password:pass});
-  if(error){loading(false);showMsg('regMsg',error.message,'error');return;}
-  const userId=data.user.id;
+
+  const {data,error} = await sb.auth.signUp({email,password:pass});
+  if(error){ loading(false); showMsg('regMsg',error.message,'error'); return; }
+
+  const userId = data.user.id;
+
   // Sign out immediately so auto-login doesn't fire routeUser before profile exists
   await sb.auth.signOut();
+
   // Build profile insert
-  const profileInsert={id:userId,name,role};
-  if(role==='engineer'&&invitedBy) profileInsert.company_admin_id=invitedBy;
-  if(role==='company_admin'&&invitedBy) profileInsert.invited_by_admin=invitedBy;
-  // Get company_name from invite
+  const profileInsert = { id: userId, name, role: roleFinal };
+
+  if(roleFinal === 'engineer'     && invitedBy) profileInsert.company_admin_id  = invitedBy;
+  if(roleFinal === 'company_admin'&& invitedBy) profileInsert.invited_by_admin  = invitedBy;
+
+  // Carry company_name from invite record
   if(inviteToken){
-    const {data:inv}=await sb.from('invitations').select('company_name,project_id').eq('token',inviteToken).single();
-    if(inv?.company_name) profileInsert.company_name=inv.company_name;
+    const {data:inv} = await sb.from('invitations').select('company_name,project_id').eq('token',inviteToken).single();
+    if(inv?.company_name) profileInsert.company_name = inv.company_name;
   }
-  const {error:pe}=await sb.from('profiles').insert(profileInsert);
-  if(pe){loading(false);showMsg('regMsg','Account created but profile failed: '+pe.message,'error');return;}
-  // If customer invite with project, create approved access request
-  if(role==='customer'&&inviteProjectId){
-    await sb.from('access_requests').insert({project_id:inviteProjectId,user_id:userId,status:'approved'});
+
+  const {error:pe} = await sb.from('profiles').insert(profileInsert);
+  if(pe){ loading(false); showMsg('regMsg','Account created but profile failed: '+pe.message,'error'); return; }
+
+  // Auto-approve project access for customer invites that include a project
+  if(roleFinal === 'customer' && inviteProjectId){
+    await sb.from('access_requests').insert({project_id:inviteProjectId, user_id:userId, status:'approved'});
   }
+
   // Mark invite as used
   if(inviteToken){
-    await sb.from('invitations').update({used:true,used_by:userId}).eq('token',inviteToken);
+    await sb.from('invitations').update({used:true, used_by:userId}).eq('token',inviteToken);
   }
+
   loading(false);
   showMsg('regMsg','Account created! Please sign in.','success');
-  setTimeout(()=>switchTab('login'),1400);
+  setTimeout(()=>switchTab('login'), 1400);
 }
 
+/* ══════════════════════════════════════
+   AUTH — AFTER AUTH
+══════════════════════════════════════ */
 async function afterAuth(authUser){
-  const {data:profile,error}=await sb.from('profiles').select('*').eq('id',authUser.id).single();
+  const {data:profile,error} = await sb.from('profiles').select('*').eq('id',authUser.id).single();
   loading(false);
-  if(error||!profile){showMsg('loginMsg','Profile not found. Please register.','error');await sb.auth.signOut();return;}
-  S.user=authUser; S.profile=profile;
-  // Check shared project URL param
-  const params=new URLSearchParams(window.location.search);
-  const sharedId=params.get('project');
-  if(sharedId&&profile.role==='customer'){
+  if(error||!profile){ showMsg('loginMsg','Profile not found. Please register.','error'); await sb.auth.signOut(); return; }
+  S.user = authUser; S.profile = profile;
+
+  const params   = new URLSearchParams(window.location.search);
+  const sharedId = params.get('project');
+  if(sharedId && profile.role==='customer'){
     await requestAccess(sharedId);
     window.history.replaceState({},document.title,window.location.pathname);
   }
@@ -520,26 +579,28 @@ async function afterAuth(authUser){
 
 function routeUser(profile){
   if(profile.role==='admin'||profile.role==='engineer'||profile.role==='company_admin'){
-    document.getElementById('dashAvatar').innerText=profile.name[0].toUpperCase();
-    document.getElementById('dashUserName').innerText=profile.name;
-    const b=document.getElementById('dashRoleBadge');
-    const roleLabel=profile.role==='company_admin'?'Company Admin':profile.role.charAt(0).toUpperCase()+profile.role.slice(1);
-    b.innerText=roleLabel;
-    b.className='role-badge '+profile.role;
-    document.getElementById('adminNav').style.display=profile.role==='admin'?'block':'none';
-    document.getElementById('cadminNav').style.display=profile.role==='company_admin'?'block':'none';
-    // Engineers can create projects; company_admin and admin cannot from nav
-    document.getElementById('nav-create').style.display=profile.role==='engineer'?'flex':'none';
-    // Enrol Customer and My Customers only for engineers
-    document.getElementById('nav-enrolCustomer').style.display=profile.role==='engineer'?'flex':'none';
-    document.getElementById('nav-mycustomers').style.display=profile.role==='engineer'?'flex':'none';
-    // company_admin sees My Projects to view their company's projects
-    document.getElementById('nav-projects').style.display=(profile.role==='engineer'||profile.role==='company_admin')?'flex':'none';
+    document.getElementById('dashAvatar').innerText = profile.name[0].toUpperCase();
+    document.getElementById('dashUserName').innerText = profile.name;
+    const b = document.getElementById('dashRoleBadge');
+    const roleLabel = profile.role==='company_admin' ? 'Company Admin'
+                    : profile.role.charAt(0).toUpperCase()+profile.role.slice(1);
+    b.innerText   = roleLabel;
+    b.className   = 'role-badge '+profile.role;
+
+    document.getElementById('adminNav').style.display   = profile.role==='admin'          ? 'block' : 'none';
+    document.getElementById('cadminNav').style.display  = profile.role==='company_admin'  ? 'block' : 'none';
+
+    // Nav visibility per role
+    document.getElementById('nav-create').style.display         = profile.role==='engineer'                             ? 'flex' : 'none';
+    document.getElementById('nav-enrolCustomer').style.display  = profile.role==='engineer'                             ? 'flex' : 'none';
+    document.getElementById('nav-mycustomers').style.display    = profile.role==='engineer'                             ? 'flex' : 'none';
+    document.getElementById('nav-projects').style.display       = (profile.role==='engineer'||profile.role==='company_admin') ? 'flex' : 'none';
+
     showPage('dashPage');
     showPanel('overview');
   } else {
-    document.getElementById('custAvatar').innerText=profile.name[0].toUpperCase();
-    document.getElementById('custUserName').innerText=profile.name;
+    document.getElementById('custAvatar').innerText   = profile.name[0].toUpperCase();
+    document.getElementById('custUserName').innerText = profile.name;
     showPage('customerPage');
     loadCustomerProjects();
   }
@@ -547,8 +608,58 @@ function routeUser(profile){
 
 async function doLogout(){
   await sb.auth.signOut();
-  S.user=null; S.profile=null;
+  S.user = null; S.profile = null;
   showPage('authPage');
+}
+
+/* ══════════════════════════════════════
+   INVITE TOKEN HANDLER
+   Called on page load when ?invite=TOKEN is present.
+   Sets regRoleFinal hidden field as single source of truth.
+══════════════════════════════════════ */
+async function handleInviteToken(token){
+  const {data:invite,error} = await sb.from('invitations').select('*').eq('token',token).eq('used',false).single();
+  if(error||!invite){
+    loading(false);
+    showMsg('loginMsg','This invitation link is invalid or has already been used.','error');
+    return;
+  }
+
+  // Switch to Register tab
+  switchTab('register');
+
+  const role = invite.role; // 'company_admin' | 'engineer' | 'customer'
+
+  // ── 1. Store role in the hidden field — this is what doRegister() reads ──
+  document.getElementById('regRoleFinal').value = role;
+
+  // ── 2. Hide the select, show a read-only pill instead ──
+  document.getElementById('roleSelectGroup').style.display  = 'none';
+  document.getElementById('roleDisplayGroup').style.display = 'block';
+
+  const roleLabels = { company_admin:'Company Admin', engineer:'Engineer', customer:'Customer' };
+  const roleIcons  = { company_admin:'🏢', engineer:'🔧', customer:'👤' };
+  const pill = document.getElementById('rolePillDisplay');
+  pill.className   = 'role-pill-display '+role;
+  pill.innerHTML   = `${roleIcons[role]||''} <strong>${roleLabels[role]||role}</strong> <span style="font-weight:400;font-size:11px;opacity:0.7">(fixed by invitation)</span>`;
+
+  // ── 3. Pre-fill & lock email ──
+  document.getElementById('regEmail').value    = invite.email || '';
+  document.getElementById('regEmail').readOnly = true;
+
+  // ── 4. Store invite context in hidden fields ──
+  document.getElementById('regInviteToken').value     = token;
+  document.getElementById('regInvitedBy').value       = invite.invited_by || '';
+  document.getElementById('regInviteProjectId').value = invite.project_id || '';
+
+  // ── 5. Show invite banner ──
+  const companyPart = invite.company_name ? ` at <strong>${invite.company_name}</strong>` : '';
+  const banner      = document.getElementById('inviteBanner');
+  banner.innerHTML  = `✉ You've been invited to join as <strong>${roleLabels[role]||role}</strong>${companyPart}. Complete registration below.`;
+  banner.style.display = 'block';
+
+  // Clean URL
+  window.history.replaceState({},document.title,window.location.pathname);
 }
 
 /* ══════════════════════════════════════
@@ -583,10 +694,8 @@ async function renderOverview(el){
   let q=sb.from('projects').select('id,name,created_at,parts,access_requests(id,status)');
   if(role==='engineer') q=q.eq('owner_id',uid);
   else if(role==='company_admin'){
-    // get all engineers under this company admin
     const {data:myEngs=[]}=await sb.from('profiles').select('id').eq('company_admin_id',uid);
-    const engIds=myEngs.map(e=>e.id);
-    engIds.push(uid);
+    const engIds=myEngs.map(e=>e.id); engIds.push(uid);
     q=q.in('owner_id',engIds);
   }
   const {data:projects=[]}=await q;
@@ -649,10 +758,10 @@ function projRow(p){
 async function renderUsers(el){
   const {data:users=[]}=await sb.from('profiles').select('*').order('created_at');
   el.innerHTML=`<div class="panel-title">All Users</div>
-    <table class="data-table"><thead><tr><th>Name</th><th>Email (Auth)</th><th>Role</th><th>Company Admin</th><th>Actions</th></tr></thead>
+    <table class="data-table"><thead><tr><th>Name</th><th>ID</th><th>Role</th><th>Company Admin</th><th>Actions</th></tr></thead>
     <tbody>${users.map(u=>`<tr>
       <td><strong>${u.name}</strong></td>
-      <td>${u.id}</td>
+      <td style="font-size:10px;color:var(--g3)">${u.id.slice(0,16)}…</td>
       <td><span class="tbl-badge ${u.role}">${u.role==='company_admin'?'Company Admin':u.role}</span></td>
       <td>${u.company_admin_id?`<span class="tbl-badge company_admin">Assigned</span>`:'—'}</td>
       <td>${u.role!=='admin'?`<button class="tbl-btn delete" onclick="deleteUser('${u.id}')">Remove</button>`:'—'}</td>
@@ -674,12 +783,12 @@ async function renderAllProjects(el){
       </td></tr>`).join('')}</tbody></table>`;
 }
 
-/* ── Admin: Enrol Company Admin (invite-link flow) ── */
+/* ── Admin: Enrol Company Admin ── */
 function renderEnrolCAdmin(el){
   el.innerHTML=`
     <div class="panel-title">Enrol Company Admin</div>
     <div class="create-form">
-      <div class="info-msg">Enter the company details and the admin's email. An invitation link will be generated — share it with them so they can self-register with the Company Admin role.</div>
+      <div class="info-msg">Enter the company details and the admin's email. An invitation link will be generated — share it with them so they can self-register with the <strong>Company Admin</strong> role locked in.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field-group" style="margin:0"><label class="field-label">Company Name</label><input type="text" id="enrolCACompany" class="field-input" placeholder="Acme Corp Ltd"></div>
         <div class="field-group" style="margin:0"><label class="field-label">Admin's Email</label><input type="email" id="enrolCAEmail" class="field-input" placeholder="admin@acme.com"></div>
@@ -690,7 +799,7 @@ function renderEnrolCAdmin(el){
       <div id="enrolCALinkBox" style="display:none">
         <div class="section-lbl" style="margin-top:12px">Invitation Link</div>
         <div class="share-link-box" id="enrolCALink"></div>
-        <div style="font-size:11px;color:var(--g3);margin-top:4px">Copy and send this link to the Company Admin. When they click it, the register form will be pre-filled with the Company Admin role and their email.</div>
+        <div style="font-size:11px;color:var(--g3);margin-top:4px">Copy and send this link to the Company Admin. When they click it, the register form will be locked to the <strong>Company Admin</strong> role.</div>
         <div class="modal-btns" style="margin-top:8px">
           <button class="tbl-btn copy" onclick="copyText('enrolCALink')">📋 Copy Link</button>
           <button class="tbl-btn view" onclick="showPanel('companies')">Done → View Companies</button>
@@ -704,21 +813,21 @@ function renderEnrolCAdmin(el){
 }
 
 async function generateCAdminInvite(){
-  const company=document.getElementById('enrolCACompany').value.trim();
-  const email=document.getElementById('enrolCAEmail').value.trim();
-  const note=document.getElementById('enrolCANote').value.trim();
-  if(!company||!email){showMsg('enrolCAMsg','Please enter company name and admin email','error');return;}
+  const company = document.getElementById('enrolCACompany').value.trim();
+  const email   = document.getElementById('enrolCAEmail').value.trim();
+  const note    = document.getElementById('enrolCANote').value.trim();
+  if(!company||!email){ showMsg('enrolCAMsg','Please enter company name and admin email','error'); return; }
   loading(true,'Generating invite…');
-  const token=crypto.randomUUID();
-  const {error}=await sb.from('invitations').insert({
-    token,role:'company_admin',email,company_name:company,
-    note:note||null,invited_by:S.profile.id,used:false
+  const token = crypto.randomUUID();
+  const {error} = await sb.from('invitations').insert({
+    token, role:'company_admin', email, company_name:company,
+    note:note||null, invited_by:S.profile.id, used:false
   });
   loading(false);
-  if(error){showMsg('enrolCAMsg','Error: '+error.message,'error');return;}
-  const link=`${window.location.origin}${window.location.pathname}?invite=${token}`;
-  document.getElementById('enrolCALink').innerText=link;
-  document.getElementById('enrolCALinkBox').style.display='block';
+  if(error){ showMsg('enrolCAMsg','Error: '+error.message,'error'); return; }
+  const link = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+  document.getElementById('enrolCALink').innerText = link;
+  document.getElementById('enrolCALinkBox').style.display = 'block';
   showMsg('enrolCAMsg','Invite link created! Send it to the Company Admin.','success');
   loadPendingInvites('company_admin','caPendingInvites');
 }
@@ -727,7 +836,7 @@ async function loadPendingInvites(role,containerId){
   const {data:invites=[]}=await sb.from('invitations').select('*').eq('role',role).eq('invited_by',S.profile.id).order('created_at',{ascending:false}).limit(20);
   const el=document.getElementById(containerId);
   if(!el) return;
-  if(invites.length===0){el.innerHTML='<div style="font-size:12px;color:var(--g3);padding:4px 0">No pending invitations.</div>';return;}
+  if(invites.length===0){ el.innerHTML='<div style="font-size:12px;color:var(--g3);padding:4px 0">No pending invitations.</div>'; return; }
   el.innerHTML=`<table class="data-table"><thead><tr><th>Email</th><th>Company</th><th>Sent</th><th>Status</th><th>Actions</th></tr></thead>
     <tbody>${invites.map(inv=>`<tr>
       <td>${inv.email||'—'}</td>
@@ -754,7 +863,7 @@ function copyText(elId){
   navigator.clipboard.writeText(document.getElementById(elId).innerText).then(()=>alert('Copied!'));
 }
 
-/* ── Admin: Companies panel ── */
+/* ── Admin: Companies ── */
 async function renderCompanies(el){
   const {data:cadmins=[]}=await sb.from('profiles').select('*').eq('role','company_admin').order('created_at');
   const {data:allEngs=[]}=await sb.from('profiles').select('id,company_admin_id').eq('role','engineer');
@@ -802,23 +911,23 @@ async function saveEngineerAssignments(cadminId){
   const toAssign=checks.filter(c=>c.checked).map(c=>c.value);
   const toUnassign=checks.filter(c=>!c.checked).map(c=>c.value);
   loading(true,'Saving…');
-  if(toAssign.length) await sb.from('profiles').update({company_admin_id:cadminId}).in('id',toAssign);
+  if(toAssign.length)   await sb.from('profiles').update({company_admin_id:cadminId}).in('id',toAssign);
   if(toUnassign.length) await sb.from('profiles').update({company_admin_id:null}).in('id',toUnassign);
   loading(false);
   showMsg('assignMsg','Assignments saved!','success');
   setTimeout(()=>showPanel('companies'),800);
 }
 
-/* ── Company Admin panels ── */
+/* ── Company Admin: My Engineers ── */
 async function renderMyEngineers(el){
   const uid=S.profile.id;
   const {data:engineers=[]}=await sb.from('profiles').select('id,name,role,created_at').eq('company_admin_id',uid).order('created_at');
   el.innerHTML=`
     <div class="flex-row">
       <div class="panel-title">My Engineers</div>
-      <button class="action-btn" onclick="showPanel('addEngineer')" style="margin-left:auto">+ Add Engineer</button>
+      <button class="action-btn" onclick="showPanel('enrolEngineer')" style="margin-left:auto">+ Enrol Engineer</button>
     </div>
-    ${engineers.length===0?'<div class="empty-state"><span class="empty-state-icon">🧑‍🔧</span><div class="empty-state-text">No engineers yet. Add one to get started.</div></div>':`
+    ${engineers.length===0?'<div class="empty-state"><span class="empty-state-icon">🧑‍🔧</span><div class="empty-state-text">No engineers yet. Use "Enrol Engineer" to invite one.</div></div>':`
     <table class="data-table"><thead><tr><th>Name</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
     <tbody>${engineers.map(u=>`<tr>
       <td><strong>${u.name}</strong></td>
@@ -851,12 +960,12 @@ async function removeEngineerFromCompany(engId){
   showPanel('myengineers');
 }
 
-/* ── Company Admin: Enrol Engineer (invite-link flow) ── */
+/* ── Company Admin: Enrol Engineer ── */
 function renderEnrolEngineer(el){
   el.innerHTML=`
     <div class="panel-title">Enrol Engineer</div>
     <div class="create-form">
-      <div class="info-msg">Enter the engineer's details. An invitation link will be generated — send it to them. When they click it, they will register with the Engineer role and be automatically assigned to your company.</div>
+      <div class="info-msg">Enter the engineer's email. An invitation link will be generated — when they click it and register, the <strong>Engineer</strong> role is locked in and they are automatically assigned to your company.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field-group" style="margin:0"><label class="field-label">Engineer's Email</label><input type="email" id="enrolEngEmail" class="field-input" placeholder="engineer@company.com"></div>
         <div class="field-group" style="margin:0"><label class="field-label">Job Title <span style="font-weight:400;color:var(--g3)">(optional)</span></label><input type="text" id="enrolEngTitle" class="field-input" placeholder="Weld Engineer"></div>
@@ -867,7 +976,7 @@ function renderEnrolEngineer(el){
       <div id="enrolEngLinkBox" style="display:none">
         <div class="section-lbl" style="margin-top:12px">Invitation Link</div>
         <div class="share-link-box" id="enrolEngLink"></div>
-        <div style="font-size:11px;color:var(--g3);margin-top:4px">Send this link to the engineer. They will register as an Engineer under your company.</div>
+        <div style="font-size:11px;color:var(--g3);margin-top:4px">Send this link to the engineer. They will register as an <strong>Engineer</strong> under your company.</div>
         <div class="modal-btns" style="margin-top:8px">
           <button class="tbl-btn copy" onclick="copyText('enrolEngLink')">📋 Copy Link</button>
           <button class="tbl-btn view" onclick="showPanel('myengineers')">Done → My Engineers</button>
@@ -881,66 +990,34 @@ function renderEnrolEngineer(el){
 }
 
 async function generateEngineerInvite(){
-  const email=document.getElementById('enrolEngEmail').value.trim();
-  const title=document.getElementById('enrolEngTitle').value.trim();
-  const note=document.getElementById('enrolEngNote').value.trim();
-  if(!email){showMsg('enrolEngMsg','Please enter the engineer\'s email','error');return;}
+  const email = document.getElementById('enrolEngEmail').value.trim();
+  const title = document.getElementById('enrolEngTitle').value.trim();
+  const note  = document.getElementById('enrolEngNote').value.trim();
+  if(!email){ showMsg('enrolEngMsg','Please enter the engineer\'s email','error'); return; }
   loading(true,'Generating invite…');
-  const token=crypto.randomUUID();
-  const {data:caProfile}=await sb.from('profiles').select('company_name').eq('id',S.profile.id).single();
-  const {error}=await sb.from('invitations').insert({
-    token,role:'engineer',email,
-    company_name:caProfile?.company_name||null,
-    job_title:title||null,note:note||null,
-    invited_by:S.profile.id,used:false
+  const token = crypto.randomUUID();
+  const {data:caProfile} = await sb.from('profiles').select('company_name').eq('id',S.profile.id).single();
+  const {error} = await sb.from('invitations').insert({
+    token, role:'engineer', email,
+    company_name: caProfile?.company_name||null,
+    job_title: title||null, note: note||null,
+    invited_by: S.profile.id, used:false
   });
   loading(false);
-  if(error){showMsg('enrolEngMsg','Error: '+error.message,'error');return;}
-  const link=`${window.location.origin}${window.location.pathname}?invite=${token}`;
-  document.getElementById('enrolEngLink').innerText=link;
-  document.getElementById('enrolEngLinkBox').style.display='block';
+  if(error){ showMsg('enrolEngMsg','Error: '+error.message,'error'); return; }
+  const link = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+  document.getElementById('enrolEngLink').innerText = link;
+  document.getElementById('enrolEngLinkBox').style.display = 'block';
   showMsg('enrolEngMsg','Invite link created! Send it to the engineer.','success');
   loadPendingInvites('engineer','engPendingInvites');
 }
 
-async function assignEngineerToMe(engId,engName){
-  loading(true);
-  await sb.from('profiles').update({company_admin_id:S.profile.id}).eq('id',engId);
-  loading(false);
-  document.getElementById('enrolEngSearchResults')&&(document.getElementById('enrolEngSearchResults').innerHTML=`<div class="auth-msg success" style="display:block">"${engName}" added to your company!</div>`);
-}
-
-async function renderCompanyProjects(el){
-  const uid=S.profile.id;
-  const {data:myEngs=[]}=await sb.from('profiles').select('id').eq('company_admin_id',uid);
-  const engIds=myEngs.map(e=>e.id); engIds.push(uid);
-  let q=sb.from('projects').select('id,name,created_at,parts,owner_id,access_requests(id,status),profiles(name)').in('owner_id',engIds).order('created_at',{ascending:false});
-  const {data:projects=[]}=await q;
-  el.innerHTML=`<div class="panel-title">All Company Projects</div>
-    ${projects.length===0?'<div class="empty-state"><span class="empty-state-icon">📁</span><div class="empty-state-text">No company projects yet.</div></div>':`
-    <table class="data-table"><thead><tr><th>Project</th><th>Engineer</th><th>Parts</th><th>Customers</th><th>Pending</th><th>Actions</th></tr></thead>
-    <tbody>${projects.map(p=>{
-      const approved=(p.access_requests||[]).filter(r=>r.status==='approved').length;
-      const pending=(p.access_requests||[]).filter(r=>r.status==='pending').length;
-      return `<tr>
-        <td><strong>${p.name}</strong></td>
-        <td>${p.profiles?.name||'—'}</td>
-        <td>${(p.parts||[]).length}</td>
-        <td><span class="tbl-badge approved">${approved}</span></td>
-        <td>${pending>0?`<span class="tbl-badge pending">${pending}</span>`:'—'}</td>
-        <td>
-          <button class="tbl-btn view" onclick="openViewer('${p.id}')">View</button>
-          <button class="tbl-btn manage" onclick="showAccess('${p.id}','${p.name}')">Access</button>
-          <button class="tbl-btn delete" onclick="deleteProject('${p.id}')">Delete</button>
-        </td></tr>`;}).join('')}</tbody></table>`}`;
-}
-
-/* ══ ENGINEER: ENROL CUSTOMER (invite-link flow) ══ */
+/* ── Engineer: Enrol Customer ── */
 function renderEnrolCustomer(el){
   el.innerHTML=`
     <div class="panel-title">Enrol Customer</div>
     <div class="create-form">
-      <div class="info-msg">Enter the customer's email and select a project to share. An invitation link is generated — send it to them. When they click the link and register, they automatically get access to the selected project.</div>
+      <div class="info-msg">Enter the customer's email and select a project to share. An invitation link is generated — when they click it and register, the <strong>Customer</strong> role is locked in and they automatically get access to the selected project.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field-group" style="margin:0"><label class="field-label">Customer's Email</label><input type="email" id="enrolCustEmail" class="field-input" placeholder="contact@customer.com"></div>
         <div class="field-group" style="margin:0"><label class="field-label">Customer's Organisation <span style="font-weight:400;color:var(--g3)">(optional)</span></label><input type="text" id="enrolCustOrg" class="field-input" placeholder="Customer Corp Ltd"></div>
@@ -955,7 +1032,7 @@ function renderEnrolCustomer(el){
       <div id="enrolCustLinkBox" style="display:none">
         <div class="section-lbl" style="margin-top:12px">Invitation Link</div>
         <div class="share-link-box" id="enrolCustLink"></div>
-        <div style="font-size:11px;color:var(--g3);margin-top:4px">Send this link to the customer. When they register via this link, they are automatically enrolled as a Customer with access to the selected project.</div>
+        <div style="font-size:11px;color:var(--g3);margin-top:4px">Send this link to the customer. They will register as a <strong>Customer</strong> with automatic access to the selected project.</div>
         <div class="modal-btns" style="margin-top:8px">
           <button class="tbl-btn copy" onclick="copyText('enrolCustLink')">📋 Copy Link</button>
           <button class="tbl-btn view" onclick="showPanel('mycustomers')">Done → My Customers</button>
@@ -965,7 +1042,6 @@ function renderEnrolCustomer(el){
       <div class="section-lbl">Pending Customer Invitations</div>
       <div id="custPendingInvites"><div class="empty-state" style="padding:12px"><span class="empty-state-text">Loading…</span></div></div>
     </div>`;
-  // Load projects
   (async()=>{
     const {data:projs=[]}=await sb.from('projects').select('id,name').eq('owner_id',S.profile.id).order('name');
     const sel=document.getElementById('enrolCustProject');
@@ -975,23 +1051,23 @@ function renderEnrolCustomer(el){
 }
 
 async function generateCustomerInvite(){
-  const email=document.getElementById('enrolCustEmail').value.trim();
-  const org=document.getElementById('enrolCustOrg').value.trim();
-  const projId=document.getElementById('enrolCustProject').value;
-  const note=document.getElementById('enrolCustNote').value.trim();
-  if(!email){showMsg('enrolCustMsg','Please enter the customer\'s email','error');return;}
+  const email  = document.getElementById('enrolCustEmail').value.trim();
+  const org    = document.getElementById('enrolCustOrg').value.trim();
+  const projId = document.getElementById('enrolCustProject').value;
+  const note   = document.getElementById('enrolCustNote').value.trim();
+  if(!email){ showMsg('enrolCustMsg','Please enter the customer\'s email','error'); return; }
   loading(true,'Generating invite…');
-  const token=crypto.randomUUID();
-  const {error}=await sb.from('invitations').insert({
-    token,role:'customer',email,
-    company_name:org||null,project_id:projId||null,
-    note:note||null,invited_by:S.profile.id,used:false
+  const token = crypto.randomUUID();
+  const {error} = await sb.from('invitations').insert({
+    token, role:'customer', email,
+    company_name: org||null, project_id: projId||null,
+    note: note||null, invited_by: S.profile.id, used:false
   });
   loading(false);
-  if(error){showMsg('enrolCustMsg','Error: '+error.message,'error');return;}
-  const link=`${window.location.origin}${window.location.pathname}?invite=${token}`;
-  document.getElementById('enrolCustLink').innerText=link;
-  document.getElementById('enrolCustLinkBox').style.display='block';
+  if(error){ showMsg('enrolCustMsg','Error: '+error.message,'error'); return; }
+  const link = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+  document.getElementById('enrolCustLink').innerText = link;
+  document.getElementById('enrolCustLinkBox').style.display = 'block';
   showMsg('enrolCustMsg','Invite link created! Send it to the customer.','success');
   loadPendingInvites('customer','custPendingInvites');
 }
@@ -999,7 +1075,6 @@ async function generateCustomerInvite(){
 /* ── Engineer: My Customers ── */
 async function renderMyCustomers(el){
   const uid=S.profile.id;
-  // Get all access requests for this engineer's projects
   const {data:projs=[]}=await sb.from('projects').select('id,name').eq('owner_id',uid);
   if(projs.length===0){
     el.innerHTML=`<div class="panel-title">My Customers</div><div class="empty-state"><span class="empty-state-icon">🔒</span><div class="empty-state-text">No projects yet. Create a project first, then enrol customers.</div></div>`;
@@ -1022,9 +1097,9 @@ async function renderMyCustomers(el){
       <td><span class="tbl-badge ${r.status}">${r.status}</span></td>
       <td>${new Date(r.requested_at).toLocaleDateString()}</td>
       <td>
-        ${r.status==='pending'?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Approve</button>`:''}
-        ${r.status==='approved'?`<button class="tbl-btn revoke" onclick="setAccessAndRefresh('${r.id}','revoked')">Revoke</button>`:''}
-        ${r.status==='revoked'?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Re-approve</button>`:''}
+        ${r.status==='pending'   ?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Approve</button>`:''}
+        ${r.status==='approved'  ?`<button class="tbl-btn revoke"  onclick="setAccessAndRefresh('${r.id}','revoked')">Revoke</button>`:''}
+        ${r.status==='revoked'   ?`<button class="tbl-btn approve" onclick="setAccessAndRefresh('${r.id}','approved')">Re-approve</button>`:''}
       </td></tr>`).join('')}</tbody></table>`}`;
 }
 
@@ -1077,23 +1152,16 @@ async function processNewFolder(files){
     if(ext==='csv'){
       promises.push(new Promise(res=>{
         const r=new FileReader();
-        r.onload=ev=>{
-          newFiles.csv.set(file.name.toLowerCase(),{name:file.name,text:ev.target.result,path:rel});
-          res();
-        };
+        r.onload=ev=>{newFiles.csv.set(file.name.toLowerCase(),{name:file.name,text:ev.target.result,path:rel});res();};
         r.readAsText(file);
       }));
     } else if(['png','jpg','jpeg'].includes(ext)){
-      // Store file reference AND dataUrl for preview
       promises.push(new Promise(res=>{
         const r=new FileReader();
         r.onload=ev=>{
-          const k=file.name.toLowerCase();
-          const kn=k.replace(/\.[^.]+$/,'');
-          const entry={name:file.name,dataUrl:ev.target.result,path:rel,file:file};
-          newFiles.images.set(k,entry);
-          newFiles.images.set(kn,entry);
-          res();
+          const k=file.name.toLowerCase(); const kn=k.replace(/\.[^.]+$/,'');
+          const entry={name:file.name,dataUrl:ev.target.result,path:rel,file};
+          newFiles.images.set(k,entry); newFiles.images.set(kn,entry); res();
         };
         r.readAsDataURL(file);
       }));
@@ -1111,47 +1179,30 @@ async function processNewFolder(files){
 
 async function createProject(){
   const name=document.getElementById('newProjName').value.trim().toUpperCase();
-  if(!name){alert('Please enter a project name.');return;}
+  if(!name){ alert('Please enter a project name.'); return; }
   const parts=detectParts(newFiles.csv);
   const btn=document.getElementById('createProjBtn');
   btn.disabled=true; btn.innerText='⏳ Uploading…';
   loading(true,'Creating project…');
-
-  // 1. Insert project row
   const {data:proj,error:pe}=await sb.from('projects').insert({name,owner_id:S.profile.id,parts}).select().single();
-  if(pe){loading(false);btn.disabled=false;btn.innerText='Create & Upload Project →';alert('Error: '+pe.message);return;}
-
+  if(pe){ loading(false); btn.disabled=false; btn.innerText='Create & Upload Project →'; alert('Error: '+pe.message); return; }
   const projId=proj.id;
-  const bucket='projects';
-
-  // 2. Upload CSV files — stored flat: projId/csv/filename.csv
   const csvEntries=[...newFiles.csv.values()];
   for(let i=0;i<csvEntries.length;i++){
     const v=csvEntries[i];
     loading(true,`Uploading CSV ${i+1}/${csvEntries.length}: ${v.name}`);
     const blob=new Blob([v.text],{type:'text/csv'});
-    const {error:ce}=await sb.storage.from(bucket).upload(`${projId}/csv/${v.name}`,blob,{upsert:true});
+    const {error:ce}=await sb.storage.from('projects').upload(`${projId}/csv/${v.name}`,blob,{upsert:true});
     if(ce) console.warn('CSV upload error:',v.name,ce.message);
   }
-
-  // 3. Upload images — stored flat: projId/images/filename.ext
-  // Deduplicate by original file path
-  const seenPaths=new Set();
-  const uniqueImages=[];
-  for(const [k,v] of newFiles.images){
-    if(v.file && !seenPaths.has(v.path)){
-      seenPaths.add(v.path);
-      uniqueImages.push(v);
-    }
-  }
+  const seenPaths=new Set(); const uniqueImages=[];
+  for(const [,v] of newFiles.images){ if(v.file&&!seenPaths.has(v.path)){ seenPaths.add(v.path); uniqueImages.push(v); } }
   for(let i=0;i<uniqueImages.length;i++){
     const v=uniqueImages[i];
     loading(true,`Uploading image ${i+1}/${uniqueImages.length}: ${v.name}`);
-    // Upload using original File object directly — most reliable
-    const {error:ie}=await sb.storage.from(bucket).upload(`${projId}/images/${v.name}`,v.file,{upsert:true,contentType:v.file.type||'image/png'});
+    const {error:ie}=await sb.storage.from('projects').upload(`${projId}/images/${v.name}`,v.file,{upsert:true,contentType:v.file.type||'image/png'});
     if(ie) console.warn('Image upload error:',v.name,ie.message);
   }
-
   loading(false);
   btn.disabled=false; btn.innerText='Create & Upload Project →';
   alert(`Project "${name}" created!\n${csvEntries.length} CSV files · ${uniqueImages.length} images uploaded.`);
@@ -1161,7 +1212,6 @@ async function createProject(){
 async function deleteProject(id){
   if(!confirm('Delete this project? This cannot be undone.')) return;
   loading(true,'Deleting…');
-  // Delete storage files
   const {data:files}=await sb.storage.from('projects').list(id,{limit:1000});
   if(files&&files.length>0){
     const paths=files.map(f=>`${id}/${f.name}`);
@@ -1175,22 +1225,12 @@ async function deleteProject(id){
 async function deleteUser(id){
   if(!confirm('Remove this user? This will delete their profile and all associated data.')) return;
   loading(true,'Removing user…');
-  // 1. Remove access requests for this user
-  const {error:e1}=await sb.from('access_requests').delete().eq('user_id',id);
-  if(e1) console.warn('access_requests delete:',e1.message);
-  // 2. Revoke any invitations they created
-  const {error:e2}=await sb.from('invitations').delete().eq('invited_by',id);
-  if(e2) console.warn('invitations delete:',e2.message);
-  // 3. Unlink engineers that belong to this company admin
-  const {error:e3}=await sb.from('profiles').update({company_admin_id:null}).eq('company_admin_id',id);
-  if(e3) console.warn('unlink engineers:',e3.message);
-  // 4. Delete the profile (this is the critical step — blocks login)
+  await sb.from('access_requests').delete().eq('user_id',id);
+  await sb.from('invitations').delete().eq('invited_by',id);
+  await sb.from('profiles').update({company_admin_id:null}).eq('company_admin_id',id);
   const {error:e4}=await sb.from('profiles').delete().eq('id',id);
   loading(false);
-  if(e4){
-    alert('Could not remove user profile: '+e4.message+'\n\nMake sure your Supabase RLS policy allows admin deletes on the profiles table.');
-    return;
-  }
+  if(e4){ alert('Could not remove user profile: '+e4.message); return; }
   showPanel('users');
 }
 
@@ -1203,8 +1243,7 @@ function showShare(projId){
   openModal('shareModal');
 }
 function copyLink(){
-  navigator.clipboard.writeText(document.getElementById('shareLinkBox').innerText)
-    .then(()=>alert('Link copied!'));
+  navigator.clipboard.writeText(document.getElementById('shareLinkBox').innerText).then(()=>alert('Link copied!'));
 }
 
 async function showAccess(projId,projName){
@@ -1213,10 +1252,7 @@ async function showAccess(projId,projName){
   body.innerHTML='<div class="empty-state"><span class="empty-state-icon">⏳</span></div>';
   openModal('accessModal');
   const {data:reqs=[]}=await sb.from('access_requests').select('id,status,requested_at,user_id,profiles(name)').eq('project_id',projId);
-  if(reqs.length===0){
-    body.innerHTML='<div class="empty-state"><span class="empty-state-icon">👥</span><div class="empty-state-text">No access requests yet.</div></div>';
-    return;
-  }
+  if(reqs.length===0){ body.innerHTML='<div class="empty-state"><span class="empty-state-icon">👥</span><div class="empty-state-text">No access requests yet.</div></div>'; return; }
   body.innerHTML=`<table class="data-table" style="margin-top:8px">
     <thead><tr><th>Customer</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
     <tbody>${reqs.map(r=>`<tr>
@@ -1224,9 +1260,9 @@ async function showAccess(projId,projName){
       <td><span class="tbl-badge ${r.status}">${r.status}</span></td>
       <td>${new Date(r.requested_at).toLocaleDateString()}</td>
       <td>
-        ${r.status==='pending'?`<button class="tbl-btn approve" onclick="setAccess('${r.id}','approved','${projId}','${projName}')">Approve</button>`:''}
-        ${r.status==='approved'?`<button class="tbl-btn revoke" onclick="setAccess('${r.id}','revoked','${projId}','${projName}')">Revoke</button>`:''}
-        ${r.status==='revoked'?`<button class="tbl-btn approve" onclick="setAccess('${r.id}','approved','${projId}','${projName}')">Re-approve</button>`:''}
+        ${r.status==='pending' ?`<button class="tbl-btn approve" onclick="setAccess('${r.id}','approved','${projId}','${projName}')">Approve</button>`:''}
+        ${r.status==='approved'?`<button class="tbl-btn revoke"  onclick="setAccess('${r.id}','revoked','${projId}','${projName}')">Revoke</button>`:''}
+        ${r.status==='revoked' ?`<button class="tbl-btn approve" onclick="setAccess('${r.id}','approved','${projId}','${projName}')">Re-approve</button>`:''}
       </td></tr>`).join('')}</tbody></table>`;
 }
 
@@ -1241,7 +1277,7 @@ async function setAccess(reqId,status,projId,projName){
 async function requestAccess(projId){
   const {data:existing}=await sb.from('access_requests').select('id,status').eq('project_id',projId).eq('user_id',S.profile.id).single();
   if(existing){
-    if(existing.status==='pending') alert('Your access request is pending approval.');
+    if(existing.status==='pending')  alert('Your access request is pending approval.');
     else if(existing.status==='approved') alert('You already have access to this project.');
     else alert('Your access was revoked. Contact the engineer.');
     return;
@@ -1280,47 +1316,32 @@ async function openViewer(projId){
   S.currentProjectId=projId;
   S.csvFiles=new Map(); S.imageFiles=new Map();
   S.welds1=[]; S.welds2=[]; S.activeCell=null;
-
-  // Get project metadata
   const {data:proj}=await sb.from('projects').select('*').eq('id',projId).single();
-  if(!proj){loading(false);alert('Project not found.');return;}
-
-  // List and download all CSV files
+  if(!proj){ loading(false); alert('Project not found.'); return; }
   loading(true,'Loading CSV data…');
-  const {data:csvList,error:csvErr}=await sb.storage.from('projects').list(`${projId}/csv`,{limit:500});
-  console.log('CSV list:',csvList,csvErr);
+  const {data:csvList}=await sb.storage.from('projects').list(`${projId}/csv`,{limit:500});
   for(const f of csvList||[]){
     if(!f.name.toLowerCase().endsWith('.csv')) continue;
-    const {data:blob,error:dlErr}=await sb.storage.from('projects').download(`${projId}/csv/${f.name}`);
-    if(dlErr){console.warn('CSV download error:',f.name,dlErr.message);continue;}
+    const {data:blob}=await sb.storage.from('projects').download(`${projId}/csv/${f.name}`);
+    if(!blob) continue;
     const text=await blob.text();
     S.csvFiles.set(f.name.toLowerCase(),{name:f.name,text});
-    console.log('Loaded CSV:',f.name,'rows:',(text.split('\n').length-1));
   }
-
-  // List all images and get public URLs — flat structure: projId/images/filename
   loading(true,'Loading images…');
-  const {data:imgList,error:imgErr}=await sb.storage.from('projects').list(`${projId}/images`,{limit:1000});
-  console.log('Image list:',imgList,imgErr);
+  const {data:imgList}=await sb.storage.from('projects').list(`${projId}/images`,{limit:1000});
   for(const f of imgList||[]){
     if(!f.name) continue;
     const ext=f.name.split('.').pop().toLowerCase();
     if(!['png','jpg','jpeg'].includes(ext)) continue;
     const {data:urlData}=sb.storage.from('projects').getPublicUrl(`${projId}/images/${f.name}`);
-    const publicUrl=urlData?.publicUrl;
-    if(!publicUrl) continue;
-    const k=f.name.toLowerCase();
-    const kn=k.replace(/\.[^.]+$/,'');
+    const publicUrl=urlData?.publicUrl; if(!publicUrl) continue;
+    const k=f.name.toLowerCase(); const kn=k.replace(/\.[^.]+$/,'');
     const entry={name:f.name,dataUrl:publicUrl,path:`${projId}/images/${f.name}`};
-    S.imageFiles.set(k,entry);
-    S.imageFiles.set(kn,entry);
-    console.log('Loaded image:',f.name,'->',publicUrl);
+    S.imageFiles.set(k,entry); S.imageFiles.set(kn,entry);
   }
-
   document.getElementById('viewerTitle').innerText=proj.name;
   document.getElementById('viewerAvatar').innerText=S.profile.name[0].toUpperCase();
   document.getElementById('viewerUserName').innerText=S.profile.name;
-
   loading(false);
   showPage('viewerPage');
   await loadLogo();
@@ -1328,33 +1349,9 @@ async function openViewer(projId){
   loadWeldData();
 }
 
-async function loadImagesRecursive(prefix,items){
-  for(const item of items){
-    if(item.id===null){
-      // It's a folder
-      const {data:sub=[]}=await sb.storage.from('projects').list(`${prefix}/${item.name}`,{limit:1000});
-      await loadImagesRecursive(`${prefix}/${item.name}`,sub||[]);
-    } else {
-      const ext=item.name.split('.').pop().toLowerCase();
-      if(['png','jpg','jpeg'].includes(ext)){
-        const fullPath=`${prefix}/${item.name}`;
-        const {data:url}=sb.storage.from('projects').getPublicUrl(fullPath);
-        const k=item.name.toLowerCase();
-        const kn=k.replace(/\.[^.]+$/,'');
-        const entry={name:item.name,dataUrl:url.publicUrl,path:fullPath};
-        S.imageFiles.set(k,entry);
-        S.imageFiles.set(kn,entry);
-        // Also index by filename without path prefix
-        const relKey=fullPath.toLowerCase().split('/images/')[1]?.replace(/\.[^.]+$/,'');
-        if(relKey) S.imageFiles.set(relKey,entry);
-      }
-    }
-  }
-}
-
 function goBack(){
-  if(S.profile.role==='customer'){showPage('customerPage');}
-  else{showPage('dashPage');showPanel('projects');}
+  if(S.profile.role==='customer'){ showPage('customerPage'); }
+  else{ showPage('dashPage'); showPanel('projects'); }
 }
 
 /* ── Viewer helpers ── */
@@ -1371,7 +1368,7 @@ function detectParts(csvMap){
     if(parts.length) return parts;
   }
   const set=new Set();
-  csvMap.forEach((v,k)=>{const m=k.match(/^(.+?)_robot[12]\.csv$/i); if(m) set.add(m[1].toUpperCase());});
+  csvMap.forEach((_,k)=>{const m=k.match(/^(.+?)_robot[12]\.csv$/i); if(m) set.add(m[1].toUpperCase());});
   return [...set];
 }
 
@@ -1416,20 +1413,16 @@ function loadPartDropdown(){
 
 function loadWeldData(){
   const part=document.getElementById('partDropdown').value;
-  console.log('loadWeldData part:',part,'csvFiles:',[...S.csvFiles.keys()],'imageFiles:',[...S.imageFiles.keys()].slice(0,10));
   ['weldNumber','jobName','positionerAngle','robotName'].forEach(id=>document.getElementById(id).innerText='—');
   const imgEl=document.getElementById('mainImage');
   imgEl.style.backgroundImage='none'; imgEl.innerText='[ Select a weld to view image ]';
   setActiveCell(null);
   const t1=getCSV(`${part}_Robot1.csv`)||getCSV(`${part}_robot1.csv`);
   const t2=getCSV(`${part}_Robot2.csv`)||getCSV(`${part}_robot2.csv`);
-  console.log('CSV t1:',t1?'found ('+t1.split('\n').length+' rows)':'NOT FOUND');
-  console.log('CSV t2:',t2?'found ('+t2.split('\n').length+' rows)':'NOT FOUND');
   S.welds1=t1?parseCSV(t1):[]; S.welds2=t2?parseCSV(t2):[];
   buildGrid(S.welds1,S.welds2,t1,t2);
   const ov=document.getElementById('overviewImage');
   const ovUrl=findImg(part);
-  console.log('Overview image for',part,':',ovUrl?'found':'NOT FOUND');
   if(ovUrl){ov.style.backgroundImage=`url("${ovUrl}")`;ov.innerText='';}
   else{ov.style.backgroundImage='none';ov.innerText='[ Part Image ]';}
 }
@@ -1482,7 +1475,7 @@ function mkCell(row,robot){
 }
 function setActiveCell(el){
   if(S.activeCell) S.activeCell.classList.remove('active');
-  S.activeCell=el;if(el) el.classList.add('active');
+  S.activeCell=el; if(el) el.classList.add('active');
 }
 
 /* ══════════════════════════════════════
@@ -1512,13 +1505,11 @@ async function exportToPPT(){
   pptx.layout='LAYOUT_16x10';pptx.title=`Apexiz – ${projName} – ${part} Weld Report`;
   const LS={w:0.714,h:0.395},LL={w:2.25,h:1.24};
 
-  // Fetch image as base64 — handles Supabase public URLs via XMLHttpRequest to avoid CORS issues
   async function imgB64(url){
     if(!url) return null;
     return new Promise(resolve=>{
       const xhr=new XMLHttpRequest();
-      xhr.open('GET',url,true);
-      xhr.responseType='arraybuffer';
+      xhr.open('GET',url,true);xhr.responseType='arraybuffer';
       xhr.onload=function(){
         if(xhr.status===200){
           const bytes=new Uint8Array(xhr.response);
@@ -1528,12 +1519,11 @@ async function exportToPPT(){
           resolve(mime+';base64,'+btoa(bin));
         } else resolve(null);
       };
-      xhr.onerror=()=>resolve(null);
-      xhr.send();
+      xhr.onerror=()=>resolve(null);xhr.send();
     });
   }
 
-  // Title slide — with Project Name
+  // Title slide
   {const sl=pptx.addSlide();sl.background={color:C.white};
    sl.addShape(pptx.shapes.RECTANGLE,{x:3.45,y:0,w:0.09,h:6.25,fill:{color:C.orange},line:{color:C.orange}});
    if(S.logob64) sl.addImage({data:S.logob64,x:0.28,y:0.28,w:LL.w,h:LL.h});
@@ -1573,7 +1563,7 @@ async function exportToPPT(){
   robotDiv(pptx,'Robot 2','Weld Jobs',LL);
   await weldSlides(pptx,S.welds2,'R2',part,LS,imgB64);
 
-  // End slide — with Project Name
+  // End slide
   {const sl=pptx.addSlide();sl.background={color:C.white};
    sl.addShape(pptx.shapes.RECTANGLE,{x:6.5,y:0,w:0.09,h:6.25,fill:{color:C.orange},line:{color:C.orange}});
    sl.addText('Thank You',{x:0.5,y:1.1,w:5.7,h:1.05,fontSize:52,bold:true,color:C.black,fontFace:'Segoe UI'});
@@ -1638,14 +1628,12 @@ async function weldSlides(pptx,welds,code,part,ls,imgB64fn){
 ══════════════════════════════════════ */
 window.addEventListener('load',async()=>{
   loading(true,'Starting…');
-  // Check for existing session
-  const {data:{session}}=await sb.auth.getSession();
+  const {data:{session}} = await sb.auth.getSession();
   if(session){
     await afterAuth(session.user);
   } else {
-    // Check URL for invite token
-    const params=new URLSearchParams(window.location.search);
-    const inviteToken=params.get('invite');
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get('invite');
     if(inviteToken){
       await handleInviteToken(inviteToken);
     }
@@ -1653,37 +1641,6 @@ window.addEventListener('load',async()=>{
   }
   loading(false);
 });
-
-async function handleInviteToken(token){
-  const {data:invite,error}=await sb.from('invitations').select('*').eq('token',token).eq('used',false).single();
-  if(error||!invite){
-    loading(false);
-    showMsg('loginMsg','This invitation link is invalid or has already been used.','error');
-    return;
-  }
-  // Switch to register tab and pre-fill
-  switchTab('register');
-  const roleSelect=document.getElementById('regRole');
-  roleSelect.value=invite.role;
-  roleSelect.disabled=true;
-  // Also store role in hidden field — disabled selects are unreliable in JS reads
-  document.getElementById('regRoleHidden').value=invite.role;
-  document.getElementById('regEmail').value=invite.email||'';
-  document.getElementById('regInviteToken').value=token;
-  document.getElementById('regInvitedBy').value=invite.invited_by||'';
-  document.getElementById('regInviteProjectId').value=invite.project_id||'';
-  // Show invite banner
-  const banner=document.getElementById('inviteBanner');
-  const roleLabel=invite.role==='company_admin'?'Company Admin':invite.role==='engineer'?'Engineer':'Customer';
-  const companyPart=invite.company_name?` at <strong>${invite.company_name}</strong>`:'';
-  banner.innerHTML=`✉ You've been invited to join as <strong>${roleLabel}</strong>${companyPart}. Complete registration below.`;
-  banner.style.display='block';
-  // Pre-fill email and lock it
-  document.getElementById('regEmail').readOnly=true;
-  // Hide role selector row — role is fixed by invite
-  document.getElementById('roleFieldGroup').style.display='none';
-  window.history.replaceState({},document.title,window.location.pathname);
-}
 </script>
 </body>
 </html>
