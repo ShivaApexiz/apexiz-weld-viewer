@@ -572,20 +572,39 @@ async function doRegister(){
     const userId = data.user?.id;
     if(!userId){ loading(false); showMsg('regMsg','Sign-up failed — no user ID returned. This email may already be registered; try signing in instead.','error'); return; }
 
-    // Sign out immediately so the session doesn't fire before profile is saved
-    await sb.auth.signOut();
+    // ── User is now signed in. Do ALL db work while authenticated, THEN sign out. ──
 
-    // Build profile — use UPSERT so existing customer profile gets corrected to the right role
-    const profileUpsert = { id: userId, name, role: roleFinal };
-    if(roleFinal === 'engineer'      && invitedByFinal) profileUpsert.company_admin_id = invitedByFinal;
-    if(roleFinal === 'company_admin' && invitedByFinal) profileUpsert.invited_by_admin = invitedByFinal;
-    if(inviteCompany) profileUpsert.company_name = inviteCompany;
+    // Build profile data
+    const profileData = { id: userId, name, role: roleFinal };
+    if(roleFinal === 'engineer'      && invitedByFinal) profileData.company_admin_id = invitedByFinal;
+    if(roleFinal === 'company_admin' && invitedByFinal) profileData.invited_by_admin = invitedByFinal;
+    if(inviteCompany) profileData.company_name = inviteCompany;
 
-    console.log('[Register] upsert profile:', JSON.stringify(profileUpsert));
+    console.log('[Register] saving profile (authenticated):', JSON.stringify(profileData));
 
-    // UPSERT (not insert) — handles case where profile already exists with wrong role
-    const {error:pe} = await sb.from('profiles').upsert(profileUpsert, {onConflict:'id'});
-    if(pe){ loading(false); showMsg('regMsg','Profile save failed: '+pe.message,'error'); return; }
+    // Try INSERT first
+    const {error:insertErr} = await sb.from('profiles').insert(profileData);
+    if(insertErr){
+      if(insertErr.code === '23505' || insertErr.message.includes('duplicate') || insertErr.message.includes('unique')){
+        // Profile already exists — UPDATE it while still authenticated
+        const updateData = { name, role: roleFinal };
+        if(profileData.company_admin_id) updateData.company_admin_id = profileData.company_admin_id;
+        if(profileData.invited_by_admin) updateData.invited_by_admin = profileData.invited_by_admin;
+        if(profileData.company_name)     updateData.company_name     = profileData.company_name;
+        const {error:updErr} = await sb.from('profiles').update(updateData).eq('id', userId);
+        if(updErr){
+          await sb.auth.signOut();
+          loading(false);
+          showMsg('regMsg','Profile update failed: '+updErr.message,'error');
+          return;
+        }
+      } else {
+        await sb.auth.signOut();
+        loading(false);
+        showMsg('regMsg','Profile save failed: '+insertErr.message,'error');
+        return;
+      }
+    }
 
     // Auto-approve project access for customer invites
     if(roleFinal === 'customer' && inviteProjFinal){
@@ -595,6 +614,9 @@ async function doRegister(){
 
     // Mark invite as used
     await sb.from('invitations').update({used:true, used_by:userId}).eq('token',inviteTokenFinal);
+
+    // NOW sign out — after all db work is done
+    await sb.auth.signOut();
 
     // Clear in-memory invite state
     INVITE.clear();
