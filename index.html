@@ -745,13 +745,36 @@ function showResetForm(){
 async function doForgotPassword(){
   const email = document.getElementById('forgotEmail').value.trim();
   if(!email){ showMsg('forgotMsg','Please enter your email address','error'); return; }
+
+  loading(true,'Checking account…');
+
+  // Check if user exists in profiles table first
+  const {data:profile, error:lookupErr} = await sb
+    .from('profiles')
+    .select('id, name')
+    .eq('email', email)
+    .maybeSingle();
+
+  if(lookupErr){
+    loading(false);
+    showMsg('forgotMsg','Lookup error: '+lookupErr.message,'error');
+    return;
+  }
+
+  if(!profile){
+    loading(false);
+    showMsg('forgotMsg','⚠️ No account found for this email address. Please register first or check the email you entered.','error');
+    return;
+  }
+
+  // User exists — send the reset email
   loading(true,'Sending reset email…');
   const {error} = await sb.auth.resetPasswordForEmail(email, {
     redirectTo: window.location.origin + window.location.pathname + '?reset=1'
   });
   loading(false);
   if(error){ showMsg('forgotMsg',error.message,'error'); return; }
-  showMsg('forgotMsg','✅ Reset link sent! Check your inbox (and spam folder).','success');
+  showMsg('forgotMsg','✅ Reset link sent to '+email+'! Check your inbox (and spam folder).','success');
 }
 
 async function doResetPassword(){
