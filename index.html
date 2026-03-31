@@ -1431,37 +1431,86 @@ async function deleteProject(id){
 }
 
 async function deleteUser(id){
-  if(!confirm('Remove this user? This deletes their profile and blocks login. This cannot be undone.')) return;
+  if(!confirm('Remove this user? This permanently deletes their account from the system.')) return;
   loading(true,'Removing user…');
 
-  const errors = [];
+  // Step 1 — clean up related data
+  await sb.from('access_requests').delete().eq('user_id',id);
+  await sb.from('invitations').delete().eq('invited_by',id);
+  await sb.from('profiles').update({company_admin_id:null}).eq('company_admin_id',id);
 
-  // 1. Revoke all their project access
-  const {error:e1} = await sb.from('access_requests').delete().eq('user_id',id);
-  if(e1) errors.push('access_requests: '+e1.message);
-
-  // 2. Delete invitations they created
-  const {error:e2} = await sb.from('invitations').delete().eq('invited_by',id);
-  if(e2) errors.push('invitations: '+e2.message);
-
-  // 3. Unlink any engineers/admins assigned to them
-  const {error:e3} = await sb.from('profiles').update({company_admin_id:null}).eq('company_admin_id',id);
-  if(e3) errors.push('unlink: '+e3.message);
-
-  // 4. Delete the profile row — this is the key step that blocks login
-  //    afterAuth() will show "Profile not found" if they try to log in again
-  const {error:e4} = await sb.from('profiles').delete().eq('id',id);
-
-  loading(false);
-
-  if(e4){
-    // Profile delete failed — show exact error so we know if it's RLS
-    alert('Could not remove user profile:\n\n'+e4.message+'\n\nCheck your Supabase RLS policy allows admin to delete from profiles table.\n\nRun this in Supabase SQL editor:\nCREATE POLICY "Admin can delete profiles" ON profiles FOR DELETE USING (true);');
+  // Step 2 — delete profile row
+  const {error:profileErr} = await sb.from('profiles').delete().eq('id',id);
+  if(profileErr){
+    loading(false);
+    alert('Profile delete failed: '+profileErr.message+
+      '\n\nFix: Run this in Supabase SQL Editor:\n'+
+      'CREATE POLICY "Admin delete profiles" ON profiles FOR DELETE USING (true);');
     return;
   }
 
-  if(errors.length) console.warn('Minor errors during user removal:', errors);
+  // Step 3 — delete the auth user via RPC (runs as SECURITY DEFINER with service role)
+  // Requires this function in Supabase — see setup instructions shown if it fails
+  const {error:authErr} = await sb.rpc('delete_auth_user', {target_user_id: id});
+  if(authErr){
+    loading(false);
+    // Profile is already deleted — auth user deletion failed
+    // Show the one-time SQL setup instructions
+    showDeleteAuthSetup(id, authErr.message);
+    return;
+  }
+
+  loading(false);
   showPanel('users');
+}
+
+// Shows a modal with the one-time Supabase SQL setup needed for auth user deletion
+function showDeleteAuthSetup(userId, errMsg){
+  const sql = `-- Run once in Supabase SQL Editor to enable auth user deletion:
+
+CREATE OR REPLACE FUNCTION delete_auth_user(target_user_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$;
+
+-- Grant execute to authenticated users (admin will call this)
+GRANT EXECUTE ON FUNCTION delete_auth_user(uuid) TO authenticated;`;
+
+  const modal = document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML=`
+    <div style="background:#fff;border-radius:10px;padding:28px 32px;width:600px;max-width:95vw;border-top:4px solid var(--orange);max-height:90vh;overflow-y:auto">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;color:#1A1A1A">
+        ⚙️ One-Time Setup Required
+      </div>
+      <div style="font-size:12px;color:#4D4D4D;margin-bottom:6px">
+        The user's profile has been deleted ✅<br>
+        To also delete their login credentials from Supabase Auth, run this SQL <strong>once</strong> in your Supabase SQL Editor:
+      </div>
+      <div style="font-size:11px;color:#767676;margin-bottom:10px">Error: ${errMsg}</div>
+      <pre id="setupSql" style="background:#F5F5F5;border:1px solid #E8E8E8;border-radius:6px;padding:14px;font-size:11px;white-space:pre-wrap;word-break:break-all;color:#1A1A1A;margin-bottom:12px">${sql}</pre>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="navigator.clipboard.writeText(document.getElementById('setupSql').innerText).then(()=>alert('SQL copied!'))"
+          style="padding:7px 16px;background:#1A1A1A;color:#fff;border:none;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer">
+          📋 Copy SQL
+        </button>
+        <a href="https://supabase.com/dashboard/project/wnetdfxysbcbkmysbuxl/sql/new" target="_blank"
+          style="padding:7px 16px;background:var(--orange);color:#fff;border:none;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center">
+          🔗 Open Supabase SQL Editor
+        </a>
+        <button onclick="this.closest('div[style*=fixed]').remove();showPanel('users')"
+          style="padding:7px 16px;background:#E8E8E8;color:#4D4D4D;border:none;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer">
+          Done (profile deleted)
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
 }
 
 async function sendPasswordReset(id, email){
